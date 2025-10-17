@@ -22,7 +22,11 @@
     .hint { color:var(--muted); font-size:13px; margin-top:6px; }
     .scoreline { display:flex; gap:8px; align-items:baseline; flex-wrap:wrap; }
     .scoreline .big { font-size:28px; font-weight:800; }
-    .chip { background:#1a2652; border:1px solid #2a3a78; padding:4px 8px; border-radius:999px; font-size:12px; color:#d6e0ff; }
+    .chip { background:#1a2652; border:1px solid #2a3a78; padding:4px 8px; border-radius:999px; font-size:12px; color:#d6e0ff; transition:background-color .2s ease, border-color .2s ease, color .2s ease; }
+    .chip[data-state="pending"] { background:#2a3560; border-color:#3b4f92; color:#f0f4ff; }
+    .chip[data-state="ok"] { background:#1b3a2a; border-color:#2f6d4a; color:#d6ffe8; }
+    .chip[data-state="error"] { background:#422032; border-color:#7a374f; color:#ffe4ec; }
+    #syncStatus { display:inline-flex; align-items:center; gap:6px; margin-top:10px; }
     canvas { display:block; width:100%; height:auto; border-radius:12px; border:1px solid #223069; }
     .legend { font-size:12px; color:var(--muted); margin-top:4px; }
     .log { font:12px/1.4 ui-monospace, Menlo, Consolas, monospace; background:#0f1430; border:1px solid #223069; border-radius:10px; padding:10px; max-height:220px; overflow:auto; }
@@ -68,6 +72,7 @@
           <span class="chip">Average: <b id="avg">—</b></span>
           <button id="reset" style="margin-left:auto">Reset</button>
         </div>
+        <div class="chip" id="syncStatus" data-state="pending">Connecting…</div>
       </div>
 
       <!-- Timing + Audio -->
@@ -391,16 +396,159 @@
       refreshLabels();
     }
 
+    const syncStatusEl = document.getElementById('syncStatus');
+    const storageKey = 'peakTimingSessionId';
+    let sessionId = null;
+    let sessionReady = false;
+    let reconnectTimer = null;
+    let uploadInFlight = false;
+    const trialQueue = [];
+
+    try {
+      const stored = window.localStorage?.getItem(storageKey);
+      if (stored) sessionId = stored;
+    } catch (err) {
+      console.warn('Local storage unavailable', err);
+    }
+
+    function setSyncStatus(state, text){
+      if (!syncStatusEl) return;
+      syncStatusEl.dataset.state = state;
+      syncStatusEl.textContent = text;
+    }
+
+    function scheduleReconnect(delayMs = 10000){
+      if (reconnectTimer) return;
+      reconnectTimer = setTimeout(() => {
+        reconnectTimer = null;
+        initSession();
+      }, delayMs);
+    }
+
+    function clientMetadata(){
+      let tz = null;
+      try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone; }
+      catch (err) { tz = null; }
+      return {
+        timezone: tz,
+        language: navigator.language,
+        platform: navigator.platform,
+      };
+    }
+
+    async function initSession(){
+      if (uploadInFlight) return;
+      setSyncStatus('pending', 'Connecting…');
+      try {
+        const res = await fetch('/api/session', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            sessionId,
+            userAgent: navigator.userAgent,
+            metadata: clientMetadata(),
+          }),
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        sessionId = data.sessionId;
+        sessionReady = true;
+        try { window.localStorage?.setItem(storageKey, sessionId); }
+        catch (err) { /* ignore */ }
+        setSyncStatus('ok', trialQueue.length ? 'Saving…' : 'Connected');
+        flushTrialQueue();
+      } catch (err) {
+        console.error('Failed to initialise session', err);
+        sessionReady = false;
+        setSyncStatus('error', 'Offline (retrying in 10s)');
+        scheduleReconnect();
+      }
+    }
+
+    async function flushTrialQueue(){
+      if (!sessionReady || uploadInFlight) return;
+      if (!trialQueue.length){
+        setSyncStatus('ok', 'All data saved');
+        return;
+      }
+      const trial = trialQueue[0];
+      uploadInFlight = true;
+      setSyncStatus('pending', 'Saving…');
+      try {
+        const res = await fetch('/api/trials', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sessionId, trial }),
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        trialQueue.shift();
+        setSyncStatus('ok', trialQueue.length ? 'Saving…' : 'All data saved');
+      } catch (err) {
+        console.error('Failed to upload trial', err);
+        sessionReady = false;
+        setSyncStatus('error', 'Offline (retrying in 10s)');
+        scheduleReconnect();
+      } finally {
+        uploadInFlight = false;
+      }
+      if (sessionReady && trialQueue.length){
+        flushTrialQueue();
+      }
+    }
+
+    function enqueueTrial(trial){
+      trialQueue.push(trial);
+      if (sessionReady) flushTrialQueue();
+      else if (syncStatusEl?.dataset.state !== 'pending') setSyncStatus('error', 'Offline (queued)');
+    }
+
+    window.addEventListener('online', () => {
+      if (!sessionReady) initSession();
+    });
+
+    initSession();
+
     const scores = [];
-    function pushScore(s){
-      scores.push(s);
+    function pushScore(result){
+      const score = result.score;
+      scores.push(score);
       const li = document.createElement('div');
-      li.textContent = s.toFixed(1);
+      li.textContent = score.toFixed(1);
       ui.log.prepend(li);
       ui.attempts.textContent = String(scores.length);
       const avg = scores.reduce((a,b)=>a+b,0)/scores.length;
       ui.avg.textContent = avg.toFixed(1);
       if (ui.log.childElementCount>40){ ui.log.removeChild(ui.log.lastChild); }
+      const settings = {
+        mode,
+        speed: Number(ui.speed.value),
+        sharpness: Number(ui.sharp.value),
+        amplitude: Number(ui.amp.value),
+        fpsCap: Number(fpsEl.value),
+        pollRateHz: Number(pollEl.value),
+        audio: audioControls ? {
+          mode: audioControls.mode?.value ?? null,
+          delayMs: audioControls.delay ? Number(audioControls.delay.value) : null,
+          durationMs: audioControls.dur ? Number(audioControls.dur.value) : null,
+          volume: audioControls.vol ? Number(audioControls.vol.value) : null,
+        } : null,
+      };
+      const timings = {
+        eventToFrameMs: (lastEventTime != null && lastFrameAfterEventTime != null)
+          ? Math.round(lastFrameAfterEventTime - lastEventTime) : null,
+        pollToFrameMs: (lastPollTime != null && lastFrameAfterPollTime != null)
+          ? Math.round(lastFrameAfterPollTime - lastPollTime) : null,
+        eventToPollMs: (lastEventTime != null && lastPollTime != null)
+          ? Math.round(lastPollTime - lastEventTime) : null,
+      };
+      enqueueTrial({
+        index: scores.length,
+        score,
+        judgement: result.judgement,
+        settings,
+        timings,
+        clientTimestamp: new Date().toISOString(),
+      });
     }
 
     ui.reset.addEventListener('click', ()=>{
@@ -495,8 +643,9 @@
             const score = 100 * atPeak;
 
             ui.lastScore.textContent = score.toFixed(1);
-            ui.judgement.textContent = (score>=90? 'Perfect' : score>=75? 'Great' : score>=50? 'Good' : 'Miss');
-            pushScore(score);
+            const judgement = (score>=90? 'Perfect' : score>=75? 'Great' : score>=50? 'Good' : 'Miss');
+            ui.judgement.textContent = judgement;
+            pushScore({ score, judgement });
             ripple = { t0: performance.now(), alive: 380 };
           });
         };
