@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Peak Timing Game – p5.js (Delayed Score + Audio Options)</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <script src="https://cdn.jsdelivr.net/npm/p5@1.9.0/lib/p5.min.js"></script>
+  <style>
+    :root { --bg:#0b1020; --panel:#131a33; --text:#eaf0ff; --muted:#9bb0ff; --accent:#7aa2ff; }
+    * { box-sizing: border-box; }
+    body { margin:0; background:var(--bg); color:var(--text); font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,"Helvetica Neue",Arial,"Noto Sans","Apple Color Emoji","Segoe UI Emoji"; }
+    .wrap { max-width:980px; margin:24px auto; padding:0 16px; }
+    h1 { font-size:22px; margin:0 0 12px; font-weight:700; letter-spacing:.2px; }
+    .grid { display:grid; grid-template-columns: 1fr 320px; gap:18px; align-items:start; }
+    .card { background:linear-gradient(180deg, #131a33, #0e1530); border:1px solid #223069; border-radius:14px; padding:12px; }
+    .toolbar { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:8px; }
+    button { background:#1a2652; border:1px solid #2a3a78; color:#eaf0ff; padding:8px 12px; border-radius:10px; cursor:pointer; font-weight:600; }
+    button[aria-pressed="true"] { background:#2a3a78; border-color:#3c56b0; }
+    .slider { display:grid; grid-template-columns: 1fr auto; gap:6px; align-items:center; margin:8px 0; }
+    .slider label { color:var(--muted); font-size:12px; }
+    input[type="range"] { width:100%; }
+    .hint { color:var(--muted); font-size:13px; margin-top:6px; }
+    .scoreline { display:flex; gap:8px; align-items:baseline; flex-wrap:wrap; }
+    .scoreline .big { font-size:28px; font-weight:800; }
+    .chip { background:#1a2652; border:1px solid #2a3a78; padding:4px 8px; border-radius:999px; font-size:12px; color:#d6e0ff; transition:background-color .2s ease, border-color .2s ease, color .2s ease; }
+    .chip[data-state="pending"] { background:#2a3560; border-color:#3b4f92; color:#f0f4ff; }
+    .chip[data-state="ok"] { background:#1b3a2a; border-color:#2f6d4a; color:#d6ffe8; }
+    .chip[data-state="error"] { background:#422032; border-color:#7a374f; color:#ffe4ec; }
+    #syncStatus { display:inline-flex; align-items:center; gap:6px; margin-top:10px; }
+    canvas { display:block; width:100%; height:auto; border-radius:12px; border:1px solid #223069; }
+    .legend { font-size:12px; color:var(--muted); margin-top:4px; }
+    .log { font:12px/1.4 ui-monospace, Menlo, Consolas, monospace; background:#0f1430; border:1px solid #223069; border-radius:10px; padding:10px; max-height:220px; overflow:auto; }
+    input[type="url"] { background:#0d1636; border:1px solid #223069; border-radius:10px; color:#eaf0ff; padding:8px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Peak Timing Game</h1>
+    <div class="grid">
+      <!-- Left: Canvas -->
+      <div class="card">
+        <div class="toolbar">
+          <button id="modeBall" aria-pressed="true">Ball</button>
+          <button id="modeBar" aria-pressed="false">Power Bar</button>
+          <span class="chip">Press Space or Click/Tap</span>
+        </div>
+        <div id="sketch-holder"></div>
+        <div class="legend">Time your input to the <b>peak</b> (ball’s highest point / bar’s max). Scoring is stricter with higher “Leniency (strictness)” values.</div>
+      </div>
+
+      <!-- Right: Controls + Scores -->
+      <div class="card" id="controls">
+        <div class="scoreline">
+          <div>Last Score:</div>
+          <div class="big" id="lastScore">—</div>
+          <span class="chip" id="judgement">Press to start</span>
+        </div>
+
+        <div class="slider"><label>Speed (cycles/sec)</label><div id="speedVal">1.40</div></div>
+        <input id="speed" type="range" min="0.4" max="3.0" step="0.02" value="1.40"/>
+
+        <div class="slider"><label>Leniency (strictness)</label><div id="sharpVal">2.0×</div></div>
+        <input id="sharp" type="range" min="1" max="6" step="0.1" value="2"/>
+
+        <div class="slider"><label>Ball Amplitude (Ball mode)</label><div id="ampVal">140</div></div>
+        <input id="amp" type="range" min="60" max="220" step="2" value="140"/>
+
+        <h3 style="margin:14px 0 8px">History</h3>
+        <div class="log" id="log"></div>
+        <div class="scoreline" style="margin-top:8px">
+          <span class="chip">Attempts: <b id="attempts">0</b></span>
+          <span class="chip">Average: <b id="avg">—</b></span>
+          <button id="reset" style="margin-left:auto">Reset</button>
+        </div>
+        <div class="chip" id="syncStatus" data-state="pending">Connecting…</div>
+      </div>
+
+      <!-- Timing + Audio -->
+      <div class="card" id="timingCard">
+        <h3 style="margin:6px 0 10px">Input & Render Timing</h3>
+        <div class="slider"><label>FPS cap</label><div id="fpsVal">60</div></div>
+        <input id="fps" type="range" min="10" max="240" step="1" value="60"/>
+        <div class="slider"><label>Input polling rate (Hz)</label><div id="pollVal">250</div></div>
+        <input id="poll" type="range" min="5" max="1000" step="5" value="250"/>
+        <div class="hint">Press Space / Click / Tap. Input is sampled by a poller and forwarded to the game on <b>down</b> edges.</div>
+
+        <div class="card" style="margin-top:10px">
+          <div id="clock" class="mini">— ms</div>
+          <div id="hud" class="mini" style="margin-top:6px">
+            <div>Last event→frame: <span class="chip" id="ev2fr">—</span></div>
+            <div>Last poll→frame: <span class="chip" id="po2fr">—</span></div>
+            <div>Last event→poll: <span class="chip" id="ev2po">—</span></div>
+          </div>
+          <h4 style="margin:10px 0 6px; font-size:13px; color:#9bb0ff">Event → Poll → Frame</h4>
+          <div class="log" id="pollLog" style="max-height:180px"></div>
+        </div>
+
+        <!-- === Audio Controls === -->
+        <div class="card" style="margin-top:10px">
+          <h3 style="margin:6px 0 8px">Audio Feedback</h3>
+
+          <div class="slider">
+            <label>Mode</label>
+            <select id="audioMode">
+              <option value="off">No sound</option>
+              <option value="immediate">Immediate at keypress</option>
+              <option value="delay">After delay (align with score)</option>
+            </select>
+          </div>
+
+          <div class="slider">
+            <label>Delay (ms)</label>
+            <div id="audioDelayVal">0</div>
+          </div>
+          <input id="audioDelay" type="range" min="0" max="500" step="5" value="0"/>
+
+          <div class="slider">
+            <label>Play duration (ms)</label>
+            <div id="audioDurVal">100</div>
+          </div>
+          <input id="audioDur" type="range" min="5" max="2000" step="5" value="100"/>
+
+          <div class="slider">
+            <label>Volume</label>
+            <div id="audioVolVal">1.00</div>
+          </div>
+          <input id="audioVol" type="range" min="0" max="1" step="0.01" value="1"/>
+
+          <div class="hint" style="margin-top:8px">Load sound from file or URL (URL must allow CORS):</div>
+          <div class="toolbar" style="margin-top:6px">
+            <input id="audioFile" type="file" accept="audio/*"/>
+            <input id="audioUrl" type="url" placeholder="https://example.com/sound.wav" style="flex:1; min-width:120px"/>
+            <button id="audioLoadUrl">Load URL</button>
+          </div>
+
+          <div class="hint" id="audioStatus">No buffer loaded (using built-in click).</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="./peakTimingGame.js"></script>
+  <script>
+    window.initPeakTimingGame?.();
+  </script>
+</body>
+</html>
