@@ -15,6 +15,7 @@ function initPeakTimingGame(){
     reset: document.getElementById('reset'),
     modeBall: document.getElementById('modeBall'),
     modeBar: document.getElementById('modeBar'),
+    modeTarget: document.getElementById('modeTarget'),
   };
 
   function refreshLabels(){
@@ -174,13 +175,13 @@ function initPeakTimingGame(){
     if (audioControls.status) audioControls.status.textContent = `Loaded: ${file.name}`;
   }
 
-  async function loadAudioFromUrl(url) {
+  async function loadAudioFromUrl(url, statusLabel) {
     ensureAudioContext();
     const r = await fetch(url, { mode: 'cors' });
     if (!r.ok) throw new Error('Fetch failed');
     const arr = await r.arrayBuffer();
     audioBuffer = await decodeArrayBufferToAudio(arr);
-    if (audioControls.status) audioControls.status.textContent = `Loaded from URL`;
+    if (audioControls.status) audioControls.status.textContent = statusLabel ?? `Loaded from URL`;
   }
 
   if (audioControls.file) {
@@ -199,6 +200,16 @@ function initPeakTimingGame(){
       catch (err) { console.error(err); if (audioControls.status) audioControls.status.textContent = 'Failed to load URL (check CORS)'; }
     });
   }
+
+  async function loadDefaultAudio(){
+    try {
+      await loadAudioFromUrl('audio/200hz-91945.mp3', 'Loaded default audio (200hz-91945.mp3)');
+    } catch (err) {
+      console.warn('Failed to load default audio', err);
+      if (audioControls.status) audioControls.status.textContent = 'Default audio unavailable (using built-in click).';
+    }
+  }
+  loadDefaultAudio();
 
   // Duration-aware, anti-click scheduling
   function scheduleSoundAt(nowCtxTime, delayMs, durMs) {
@@ -246,12 +257,21 @@ function initPeakTimingGame(){
 
   // ------- Game state & buttons -------
   let mode = 'ball';
+  let targetPos = 1; // 0..1 bottom→top of the power bar
+
+  function randomizeTarget(){
+    targetPos = Math.random();
+  }
+
   ui.modeBall.addEventListener('click', () => setMode('ball'));
   ui.modeBar.addEventListener('click', () => setMode('bar'));
+  ui.modeTarget?.addEventListener('click', () => setMode('target'));
   function setMode(m){
     mode = m;
     ui.modeBall.setAttribute('aria-pressed', m==='ball');
     ui.modeBar.setAttribute('aria-pressed', m==='bar');
+    ui.modeTarget?.setAttribute('aria-pressed', m==='target');
+    if (mode === 'target'){ randomizeTarget(); }
     refreshLabels();
   }
 
@@ -391,6 +411,8 @@ function initPeakTimingGame(){
         durationMs: audioControls.dur ? Number(audioControls.dur.value) : null,
         volume: audioControls.vol ? Number(audioControls.vol.value) : null,
       } : null,
+      targetPosition: mode === 'target' ? (result.target ?? targetPos) : null,
+      playerValue: mode === 'target' ? (result.playerValue ?? null) : null,
     };
     const timings = {
       eventToFrameMs: (lastEventTime != null && lastFrameAfterEventTime != null)
@@ -493,10 +515,20 @@ function initPeakTimingGame(){
           const sharp = +ui.sharp.value;
 
           let closeness;
+          const trialTarget = targetPos;
+          let playerValue = null;
+
           if (mode === 'ball'){
             closeness = (1 + Math.cos(thetaEval)) / 2;   // 1 at peak
           } else {
-            closeness = (1 - Math.cos(thetaEval)) / 2;   // peak at π
+            const normHeight = (1 - Math.cos(thetaEval)) / 2;   // peak at 1
+            if (mode === 'bar'){
+              closeness = normHeight;
+            } else {
+              playerValue = normHeight;
+              const distance = Math.abs(normHeight - trialTarget);
+              closeness = Math.max(0, 1 - distance);
+            }
           }
           const atPeak = Math.pow(closeness, sharp);
           const score = 100 * atPeak;
@@ -504,8 +536,9 @@ function initPeakTimingGame(){
           ui.lastScore.textContent = score.toFixed(1);
           const judgement = (score>=90? 'Perfect' : score>=75? 'Great' : score>=50? 'Good' : 'Miss');
           ui.judgement.textContent = judgement;
-          pushScore({ score, judgement });
-          ripple = { t0: performance.now(), alive: 380 };
+          pushScore({ score, judgement, target: (mode === 'target') ? trialTarget : null, playerValue });
+          ripple = { t0: performance.now(), alive: 380, mode, theta: thetaEval, target: trialTarget, playerValue };
+          if (mode === 'target'){ randomizeTarget(); }
         });
       };
     };
@@ -566,6 +599,32 @@ function initPeakTimingGame(){
       p.pop();
     }
 
+    function drawTargetScene(){
+      const bx = W*0.25, bw = 36, h = H*0.72, pad = 22;
+      const y0 = (H - h)/2;
+
+      p.push(); p.noStroke(); p.fill(20, 30, 70);
+      p.rect(bx, y0, bw, h, 10); p.pop();
+
+      const innerTop = y0 + pad, innerBot = y0 + h - pad;
+      const currentNorm = (1 - Math.cos(theta))/2;
+      const currentY = p.lerp(innerBot, innerTop, currentNorm);
+
+      p.push(); p.noStroke(); p.fill(122, 162, 255);
+      p.rect(bx + 6, currentY, bw - 12, innerBot - currentY, 6); p.pop();
+
+      const targetY = p.lerp(innerBot, innerTop, targetPos);
+      p.push();
+      p.noFill(); p.stroke(255, 214, 116); p.strokeWeight(3);
+      p.circle(bx + bw/2, targetY, 26);
+      p.pop();
+
+      p.push(); p.noStroke(); p.fill(200, 210, 255);
+      p.textAlign(p.LEFT, p.TOP); p.textSize(14);
+      p.text('Match the target circle’s height on the slider', W*0.5, H*0.22);
+      p.pop();
+    }
+
     p.draw = () => {
       const nowPerf = performance.now();
 
@@ -588,7 +647,9 @@ function initPeakTimingGame(){
       if (pendingPollFrame){ lastFrameAfterPollTime = nowPerf; po2frEl.textContent = Math.round(lastFrameAfterPollTime - lastPollTime) + ' ms'; pendingPollFrame = false; }
 
       p.background(12, 18, 42);
-      if (mode === 'ball'){ drawBallScene(); } else { drawBarScene(); }
+      if (mode === 'ball'){ drawBallScene(); }
+      else if (mode === 'bar'){ drawBarScene(); }
+      else { drawTargetScene(); }
 
       if (ripple){
         const age = nowPerf - ripple.t0, life = ripple.alive;
@@ -597,9 +658,25 @@ function initPeakTimingGame(){
           const t = age / life;
           const r = p.lerp(6, 60, t), a = p.lerp(180, 0, t);
           p.noFill(); p.stroke(122,162,255, a); p.strokeWeight(2);
-          const cx=W*0.25, cy=H*0.5, A=+ui.amp.value;
-          const y = (mode==='ball') ? cy - A*Math.cos(theta) : (H*0.5 - (H*0.72)/2 + 22);
-          p.circle(W*0.25 + (mode==='ball' ? 0 : 18), y, r*2);
+          let cx = W*0.25;
+          let cy = H*0.5;
+          if (ripple.mode === 'ball'){
+            const A = +ui.amp.value;
+            cy = H*0.5 - A*Math.cos(ripple.theta ?? theta);
+          } else {
+            const bx = W*0.25, bw = 36, h = H*0.72, pad = 22;
+            const y0 = (H - h)/2;
+            const innerTop = y0 + pad, innerBot = y0 + h - pad;
+            cx = bx + bw/2;
+            if (ripple.mode === 'target' && typeof ripple.playerValue === 'number'){
+              cy = p.lerp(innerBot, innerTop, ripple.playerValue);
+            } else if (ripple.mode === 'target' && typeof ripple.target === 'number'){
+              cy = p.lerp(innerBot, innerTop, ripple.target);
+            } else {
+              cy = innerTop;
+            }
+          }
+          p.circle(cx, cy, r*2);
         }
       }
     };
