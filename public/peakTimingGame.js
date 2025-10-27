@@ -34,7 +34,7 @@ function initPeakTimingGame(){
     ui.ampVal.textContent = (+ui.amp.value).toFixed(0);
     if (ui.pointsMaxVal) ui.pointsMaxVal.textContent = (+ui.pointsMax.value).toFixed(0);
     if (ui.rewardGammaVal) ui.rewardGammaVal.textContent = (+ui.rewardGamma.value).toFixed(2);
-    if (ui.playerSpeedVal) ui.playerSpeedVal.textContent = (+ui.playerSpeed.value).toFixed(0);
+    if (ui.playerSpeedVal) ui.playerSpeedVal.textContent = (+ui.playerSpeed.value).toFixed(2) + ' s';
     if (ui.targetMinVal) ui.targetMinVal.textContent = (+ui.targetMin.value).toFixed(2);
     if (ui.targetMaxVal) ui.targetMaxVal.textContent = (+ui.targetMax.value).toFixed(2);
   }
@@ -274,10 +274,11 @@ function initPeakTimingGame(){
 
   // ------- Game state & buttons -------
   let mode = 'ball';
-  let targetPos = 1; // 0..1 bottom→top of the power bar
+  let targetPos = 1; // 0..1 along the slider (left→right)
 
   const TARGET_TRIAL_MS = 4500;
   const TARGET_INTER_TRIAL_MS = 700;
+  const TARGET_MOVE_DELAY_MS = 500;
   const FEEDBACK_FX_MS = 1100;
 
   const targetGame = {
@@ -293,13 +294,14 @@ function initPeakTimingGame(){
     hasOutcome: false,
     lowerBound: 0,
     upperBound: 1,
+    moveDelayUntil: null,
   };
 
   function targetConfigSnapshot(){
     return {
       POINTS_MAX_PER_TRIAL: ui.pointsMax ? Number(ui.pointsMax.value) : null,
       REWARD_GAMMA: ui.rewardGamma ? Number(ui.rewardGamma.value) : null,
-      PLAYER_PX_PER_S: ui.playerSpeed ? Number(ui.playerSpeed.value) : null,
+      PLAYER_TRAVEL_SECONDS: ui.playerSpeed ? Number(ui.playerSpeed.value) : null,
       TARGET_MIN_POS: ui.targetMin ? Number(ui.targetMin.value) : null,
       TARGET_MAX_POS: ui.targetMax ? Number(ui.targetMax.value) : null,
     };
@@ -341,6 +343,7 @@ function initPeakTimingGame(){
     targetGame.hasOutcome = false;
     targetGame.lowerBound = 0;
     targetGame.upperBound = 1;
+    targetGame.moveDelayUntil = null;
   }
 
   function ensureTargetBounds(){
@@ -383,6 +386,7 @@ function initPeakTimingGame(){
     targetGame.lowerBound = lower;
     targetGame.upperBound = Math.max(lower, upper);
     targetGame.playerPos = clamp(targetGame.lowerBound, 0, 1);
+    targetGame.moveDelayUntil = now + TARGET_MOVE_DELAY_MS;
     targetGame.analytics = {
       trialStart: now,
       configSnapshot: cfg,
@@ -435,7 +439,8 @@ function initPeakTimingGame(){
     const distance = Math.abs(playerValue - trialTarget);
     const proximity = clamp(1 - distance, 0, 1);
     const gamma = Number.isFinite(cfg.REWARD_GAMMA) ? cfg.REWARD_GAMMA : 1;
-    const pointsMax = Number.isFinite(cfg.POINTS_MAX_PER_TRIAL) ? cfg.POINTS_MAX_PER_TRIAL : 0;
+    const rawPointsMax = Number.isFinite(cfg.POINTS_MAX_PER_TRIAL) ? cfg.POINTS_MAX_PER_TRIAL : 0;
+    const pointsMax = Math.min(100, rawPointsMax);
     const proximityGamma = Math.pow(proximity, gamma);
     const reward = Math.round(proximityGamma * pointsMax);
     const colorRGB = targetColorForProximity(proximity);
@@ -701,7 +706,7 @@ function initPeakTimingGame(){
       playerValue: mode === 'target' ? (result.playerValue ?? null) : null,
       pointsMaxPerTrial: ui.pointsMax ? Number(ui.pointsMax.value) : null,
       rewardGamma: ui.rewardGamma ? Number(ui.rewardGamma.value) : null,
-      playerPxPerS: ui.playerSpeed ? Number(ui.playerSpeed.value) : null,
+      playerTravelSeconds: ui.playerSpeed ? Number(ui.playerSpeed.value) : null,
       targetMinPos: ui.targetMin ? Number(ui.targetMin.value) : null,
       targetMaxPos: ui.targetMax ? Number(ui.targetMax.value) : null,
     };
@@ -751,7 +756,7 @@ function initPeakTimingGame(){
   ui.playerSpeed?.addEventListener('input', () => {
     refreshLabels();
     const value = Number(ui.playerSpeed.value);
-    logTargetConfig('change', { field: 'PLAYER_PX_PER_S', value });
+    logTargetConfig('change', { field: 'PLAYER_TRAVEL_SECONDS', value });
   });
   ui.targetMin?.addEventListener('input', () => {
     refreshLabels();
@@ -945,30 +950,44 @@ function initPeakTimingGame(){
       p.pop();
     }
 
+    function targetTrackGeometry(){
+      const bw = W * 0.56;
+      const bh = 36;
+      const bx = (W - bw) / 2;
+      const by = (H - bh) / 2;
+      const pad = 28;
+      const innerLeft = bx + pad;
+      const innerRight = bx + bw - pad;
+      const cy = by + bh / 2;
+      return { bx, by, bw, bh, pad, innerLeft, innerRight, cy };
+    }
+
     function drawTargetScene(){
-      const bx = W*0.25, bw = 36, h = H*0.72, pad = 22;
-      const y0 = (H - h)/2;
+      const geom = targetTrackGeometry();
 
       p.push(); p.noStroke(); p.fill(20, 30, 70);
-      p.rect(bx, y0, bw, h, 10); p.pop();
-
-      const innerTop = y0 + pad, innerBot = y0 + h - pad;
+      p.rect(geom.bx, geom.by, geom.bw, geom.bh, 10); p.pop();
 
       maybeStartTargetTrial();
 
       if (targetGame.status === 'running'){
-        const track = innerBot - innerTop;
-        const speed = Number(ui.playerSpeed?.value ?? 0);
+        const now = performance.now();
+        if (targetGame.moveDelayUntil != null && now >= targetGame.moveDelayUntil){
+          targetGame.moveDelayUntil = null;
+        }
+        const readyToMove = targetGame.moveDelayUntil == null;
+        const travelSeconds = Number(ui.playerSpeed?.value ?? 0);
         const lower = clamp(targetGame.lowerBound ?? 0, 0, 1);
         const upper = clamp(targetGame.upperBound ?? 1, lower, 1);
-        if (track > 0 && Number.isFinite(speed)){
-          const delta = (speed / track) * (p.deltaTime / 1000);
+        const span = Math.max(upper - lower, 0);
+        if (readyToMove && span > 0 && Number.isFinite(travelSeconds) && travelSeconds > 0){
+          const delta = (span / travelSeconds) * (p.deltaTime / 1000);
           const proposed = (targetGame.playerPos ?? lower) + targetGame.direction * delta;
           targetGame.playerPos = clamp(proposed, lower, upper);
           if (targetGame.playerPos >= upper && upper > lower){ targetGame.direction = -1; }
           else if (targetGame.playerPos <= lower && upper > lower){ targetGame.direction = 1; }
         }
-        if (targetGame.timeoutAt != null && performance.now() >= targetGame.timeoutAt){
+        if (targetGame.timeoutAt != null && now >= targetGame.timeoutAt){
           handleTargetTimeout();
         }
       }
@@ -979,19 +998,21 @@ function initPeakTimingGame(){
       const lowerClamped = clamp(targetGame.lowerBound ?? 0, 0, 1);
       const upperClamped = clamp(targetGame.upperBound ?? 1, lowerClamped, 1);
       const playerNorm = clamp(playerNormRaw, lowerClamped, upperClamped);
-      const playerY = p.lerp(innerBot, innerTop, playerNorm);
-      const targetY = p.lerp(innerBot, innerTop, clamp(targetPos, 0, 1));
+      const playerX = p.lerp(geom.innerLeft, geom.innerRight, playerNorm);
+      const targetX = p.lerp(geom.innerLeft, geom.innerRight, clamp(targetPos, 0, 1));
+      const cy = geom.cy;
 
       p.push(); p.noStroke(); p.fill(122, 162, 255);
-      p.rect(bx + 6, playerY, bw - 12, innerBot - playerY, 6); p.pop();
+      const barWidth = Math.max(0, playerX - geom.innerLeft);
+      p.rect(geom.innerLeft, geom.by + 6, barWidth, geom.bh - 12, 6); p.pop();
 
       p.push(); p.noStroke(); p.fill(180, 196, 255);
-      p.circle(bx + bw/2, playerY, 18);
+      p.circle(playerX, cy, 18);
       p.pop();
 
       p.push();
       p.noFill(); p.stroke(255, 214, 116); p.strokeWeight(3);
-      p.circle(bx + bw/2, targetY, 26);
+      p.circle(targetX, cy, 26);
       p.pop();
 
       if (targetGame.feedback && targetGame.feedback.playerValue != null){
@@ -999,7 +1020,7 @@ function initPeakTimingGame(){
         p.push();
         p.stroke(color[0], color[1], color[2], 220);
         p.strokeWeight(4);
-        p.line(bx + bw/2, playerY, bx + bw/2, targetY);
+        p.line(playerX, cy, targetX, cy);
         p.pop();
       }
 
@@ -1008,7 +1029,7 @@ function initPeakTimingGame(){
         p.push();
         p.stroke(color[0], color[1], color[2], 200);
         p.strokeWeight(2.5);
-        p.line(bx + bw/2, playerY, bx + bw/2, targetY);
+        p.line(playerX, cy, targetX, cy);
         p.pop();
       }
 
@@ -1023,8 +1044,8 @@ function initPeakTimingGame(){
           p.textSize(26);
           p.fill(color[0], color[1], color[2], alpha);
           p.noStroke();
-          const midY = (playerY + targetY) / 2;
-          p.text(`+${targetGame.feedback.reward} pts`, bx + bw/2, midY - 12);
+          const midX = (playerX + targetX) / 2;
+          p.text(`+${targetGame.feedback.reward} pts`, midX, cy - 18);
           p.pop();
         }
       }
@@ -1048,7 +1069,7 @@ function initPeakTimingGame(){
 
       p.push(); p.noStroke(); p.fill(200, 210, 255);
       p.textAlign(p.LEFT, p.TOP); p.textSize(14);
-      p.text('Match the target circle’s height on the slider', W*0.5, H*0.22);
+      p.text('Match the target circle’s position on the slider', W*0.5, H*0.22);
       p.pop();
     }
 
@@ -1091,16 +1112,13 @@ function initPeakTimingGame(){
             const A = +ui.amp.value;
             cy = H*0.5 - A*Math.cos(ripple.theta ?? theta);
           } else {
-            const bx = W*0.25, bw = 36, h = H*0.72, pad = 22;
-            const y0 = (H - h)/2;
-            const innerTop = y0 + pad, innerBot = y0 + h - pad;
-            cx = bx + bw/2;
+            const geom = targetTrackGeometry();
+            cx = (geom.innerLeft + geom.innerRight) / 2;
+            cy = geom.cy;
             if (ripple.mode === 'target' && typeof ripple.playerValue === 'number'){
-              cy = p.lerp(innerBot, innerTop, ripple.playerValue);
+              cx = p.lerp(geom.innerLeft, geom.innerRight, ripple.playerValue);
             } else if (ripple.mode === 'target' && typeof ripple.target === 'number'){
-              cy = p.lerp(innerBot, innerTop, ripple.target);
-            } else {
-              cy = innerTop;
+              cx = p.lerp(geom.innerLeft, geom.innerRight, ripple.target);
             }
           }
           p.circle(cx, cy, r*2);
