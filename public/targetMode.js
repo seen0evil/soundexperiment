@@ -15,6 +15,7 @@
       nextTrialAt: null,
       playerCapturedProgress: null,
       playerFrozenProgress: null,
+      playerPressSnapshot: null,
       pendingRevealAt: null,
       feedback: null,
       hasOutcome: false,
@@ -88,6 +89,7 @@
       state.nextTrialAt = null;
       state.playerCapturedProgress = null;
       state.playerFrozenProgress = null;
+      state.playerPressSnapshot = null;
       state.pendingRevealAt = null;
       state.feedback = null;
       state.hasOutcome = false;
@@ -118,6 +120,7 @@
       state.nextTrialAt = null;
       state.playerCapturedProgress = null;
       state.playerFrozenProgress = null;
+      state.playerPressSnapshot = null;
       state.pendingRevealAt = null;
       state.feedback = null;
       state.hasOutcome = false;
@@ -141,22 +144,52 @@
       }
     }
 
+    function progressAt(timeMs){
+      if (state.progressStartAt == null){
+        return state.progress;
+      }
+      if (timeMs <= state.progressStartAt){
+        return 0;
+      }
+      const elapsed = timeMs - state.progressStartAt;
+      const duration = state.progressDurationMs > 0 ? state.progressDurationMs : 1;
+      return clamp(elapsed / duration, 0, 1);
+    }
+
+    function finalizePendingReveal(now){
+      if (state.pendingRevealAt == null) return false;
+      if (now < state.pendingRevealAt) return false;
+      const captureAt = state.pendingRevealAt;
+      const captureValue = progressAt(captureAt);
+      state.playerCapturedProgress = captureValue;
+      state.playerFrozenProgress = captureValue;
+      state.progress = captureValue;
+      state.pendingRevealAt = null;
+      return true;
+    }
+
     function freezePlayer(options = {}){
       if (state.status !== 'running') return false;
       const now = performance.now();
       const revealDelayMsRaw = options?.revealDelayMs;
       const revealDelayMs = Number.isFinite(revealDelayMsRaw) ? Math.max(0, revealDelayMsRaw) : 0;
+      const pressValue = progressAt(now);
       state.status = 'awaiting';
-      state.playerCapturedProgress = state.progress;
+      state.playerPressSnapshot = pressValue;
+      state.playerCapturedProgress = null;
       state.playerFrozenProgress = null;
       state.timeoutAt = null;
       state.pendingRevealAt = now + revealDelayMs;
+      state.progress = pressValue;
       if (state.analytics){
         state.analytics.freezeEvent = {
           at: now,
-          playerValue: state.playerCapturedProgress,
+          playerValueAtPress: pressValue,
           revealAt: state.pendingRevealAt,
         };
+      }
+      if (revealDelayMs === 0){
+        finalizePendingReveal(now);
       }
       return true;
     }
@@ -172,11 +205,17 @@
     }
 
     function completeReward(){
-      const playerValue = (state.playerCapturedProgress != null)
-        ? state.playerCapturedProgress
-        : state.playerFrozenProgress;
-      if (playerValue == null || state.hasOutcome) return;
       const now = performance.now();
+      finalizePendingReveal(now);
+      let playerValue = null;
+      if (state.playerCapturedProgress != null){
+        playerValue = state.playerCapturedProgress;
+      } else if (state.playerFrozenProgress != null){
+        playerValue = state.playerFrozenProgress;
+      } else {
+        playerValue = progressAt(now);
+      }
+      if (playerValue == null || state.hasOutcome) return;
       const cfg = targetConfigSnapshot();
       const trialTarget = state.targetPos;
       const distance = Math.abs(playerValue - trialTarget);
@@ -294,15 +333,12 @@
 
     function tick(now){
       if (state.status === 'running' || state.status === 'awaiting'){
-        if (now < state.progressStartAt){
-          state.progress = 0;
-        } else {
-          const elapsed = now - state.progressStartAt;
-          const t = state.progressDurationMs > 0 ? elapsed / state.progressDurationMs : 1;
-          state.progress = clamp(t, 0, 1);
-        }
+        state.progress = progressAt(now);
         if (state.status === 'running' && state.timeoutAt != null && now >= state.timeoutAt){
           handleTimeout(now);
+        }
+        if (state.status === 'awaiting'){
+          finalizePendingReveal(now);
         }
       }
       if ((state.status === 'feedback' || state.status === 'timeout') && state.nextTrialAt != null && now >= state.nextTrialAt){
