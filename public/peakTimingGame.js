@@ -673,11 +673,8 @@ function initPeakTimingGame(){
       const bx = Math.round((Wc - trackWidth) / 2);
       const by = Math.round((Hc - trackHeight) / 2);
       const maxPad = Math.floor(trackWidth / 2 - 12);
-      const padScale = Math.round(trackWidth * 0.06);
-      const padHeight = Math.round(trackHeight * 0.45);
-      const handleRadius = 9;
-      const padMin = handleRadius + 4;
-      const pad = Math.max(padMin, Math.min(maxPad, padScale, padHeight));
+      const padBase = Math.round(trackWidth * 0.08);
+      const pad = Math.max(24, Math.min(32, maxPad, padBase));
       const innerLeft = bx + pad;
       const innerRight = bx + trackWidth - pad;
       const cy = by + trackHeight / 2;

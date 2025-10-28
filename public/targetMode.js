@@ -13,7 +13,7 @@
       progressDurationMs: 1000,
       timeoutAt: null,
       nextTrialAt: null,
-      playerPressSnapshot: null,
+      playerCapturedProgress: null,
       playerFrozenProgress: null,
       pendingRevealAt: null,
       feedback: null,
@@ -86,7 +86,7 @@
       state.progressDurationMs = 1000;
       state.timeoutAt = null;
       state.nextTrialAt = null;
-      state.playerPressSnapshot = null;
+      state.playerCapturedProgress = null;
       state.playerFrozenProgress = null;
       state.pendingRevealAt = null;
       state.feedback = null;
@@ -116,7 +116,7 @@
       state.progressDurationMs = durationMs;
       state.timeoutAt = state.progressStartAt + durationMs;
       state.nextTrialAt = null;
-      state.playerPressSnapshot = null;
+      state.playerCapturedProgress = null;
       state.playerFrozenProgress = null;
       state.pendingRevealAt = null;
       state.feedback = null;
@@ -147,15 +147,14 @@
       const revealDelayMsRaw = options?.revealDelayMs;
       const revealDelayMs = Number.isFinite(revealDelayMsRaw) ? Math.max(0, revealDelayMsRaw) : 0;
       state.status = 'awaiting';
-      state.playerPressSnapshot = state.progress;
+      state.playerCapturedProgress = state.progress;
       state.playerFrozenProgress = null;
       state.timeoutAt = null;
       state.pendingRevealAt = now + revealDelayMs;
       if (state.analytics){
         state.analytics.freezeEvent = {
           at: now,
-          playerValueAtPress: state.playerPressSnapshot,
-          playerValue: state.playerPressSnapshot,
+          playerValue: state.playerCapturedProgress,
           revealAt: state.pendingRevealAt,
         };
       }
@@ -173,13 +172,10 @@
     }
 
     function completeReward(){
-      if (state.hasOutcome || (state.status !== 'awaiting' && state.status !== 'running')){
-        return;
-      }
-      const playerValueRaw = (state.playerFrozenProgress != null)
-        ? state.playerFrozenProgress
-        : state.progress;
-      const playerValue = clamp(playerValueRaw, 0, 1);
+      const playerValue = (state.playerCapturedProgress != null)
+        ? state.playerCapturedProgress
+        : state.playerFrozenProgress;
+      if (playerValue == null || state.hasOutcome) return;
       const now = performance.now();
       const cfg = targetConfigSnapshot();
       const trialTarget = state.targetPos;
@@ -195,8 +191,7 @@
       const pressSnapshot = state.playerPressSnapshot;
       state.status = 'feedback';
       state.playerFrozenProgress = playerValue;
-      state.progress = playerValue;
-      state.playerPressSnapshot = null;
+      state.playerCapturedProgress = null;
       state.pendingRevealAt = null;
       state.feedback = {
         startedAt: now,
@@ -265,7 +260,7 @@
       state.nextTrialAt = now + FEEDBACK_FX_MS + TARGET_INTER_TRIAL_MS;
       state.hasOutcome = true;
       state.progress = 1;
-      state.playerPressSnapshot = null;
+      state.playerCapturedProgress = null;
       state.pendingRevealAt = null;
 
       if (state.analytics){
@@ -415,6 +410,7 @@
       getTargetValue(){ return state.targetPos; },
       getPlayerValue(){
         if (state.playerFrozenProgress != null) return state.playerFrozenProgress;
+        if (state.playerCapturedProgress != null) return state.playerCapturedProgress;
         return state.progress;
       },
     };
