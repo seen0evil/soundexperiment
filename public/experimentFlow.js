@@ -25,7 +25,7 @@
       }
     ],
     blocks: [
-      { 
+      {
         id: 'practice',
         label: 'Practice block',
         trials: 6,
@@ -39,8 +39,6 @@
           playerSpeed: 1.0,
           targetMin: 0.6,
           targetMax: 0.9,
-          audioMode: 'immediate',
-          audioDelayMs: 0,
         }
       },
       {
@@ -57,8 +55,6 @@
           playerSpeed: 1.0,
           targetMin: 0.6,
           targetMax: 0.9,
-          audioMode: 'immediate',
-          audioDelayMs: 100,
         }
       }
     ],

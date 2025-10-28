@@ -592,26 +592,6 @@ function initPeakTimingGame(options = {}){
     });
   }
 
-  function setAudioMode(value){
-    if (!audioControls.mode || value == null) return;
-    audioControls.mode.value = String(value);
-    try {
-      audioControls.mode.dispatchEvent(new Event('change', { bubbles: true }));
-    } catch (err) {
-      audioControls.mode.dispatchEvent(new Event('change'));
-    }
-  }
-
-  function setAudioDelay(value){
-    if (!audioControls.delay || value == null) return;
-    setSliderValue(audioControls.delay, value);
-  }
-
-  function setAudioDuration(value){
-    if (!audioControls.dur || value == null) return;
-    setSliderValue(audioControls.dur, value);
-  }
-
   const controller = {
     setMode,
     getMode: () => mode,
@@ -652,15 +632,6 @@ function initPeakTimingGame(options = {}){
         if (Object.prototype.hasOwnProperty.call(params, key)) targetParams[key] = params[key];
       });
       if (Object.keys(targetParams).length){ this.setTargetParams(targetParams); }
-      if (Object.prototype.hasOwnProperty.call(params, 'audioMode')){
-        this.setAudioMode(params.audioMode);
-      }
-      if (Object.prototype.hasOwnProperty.call(params, 'audioDelayMs')){
-        this.setAudioDelay(params.audioDelayMs);
-      }
-      if (Object.prototype.hasOwnProperty.call(params, 'audioDurationMs')){
-        this.setAudioDuration(params.audioDurationMs);
-      }
     },
     lockUi(flag){ lockUiElements(!!flag); },
     setInputEnabled(flag){ gameInputEnabled = !!flag; },
@@ -680,9 +651,6 @@ function initPeakTimingGame(options = {}){
     triggerPress(){ if (gameInputEnabled && typeof invokePress === 'function'){ invokePress(); } },
     getTargetMode: () => targetMode,
     getTrialQueueLength: () => trialQueue.length,
-    setAudioMode,
-    setAudioDelay,
-    setAudioDuration,
   };
 
   if (opts.lockControls){ controller.lockUi(true); }

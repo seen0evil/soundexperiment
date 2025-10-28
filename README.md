@@ -49,8 +49,7 @@ object before `experimentFlow.js` executes. The object accepts:
 - `blocks` – Ordered block definitions with `id`, `label`, `trials`,
   `upload` (whether the block counts toward the final dataset), and
   `parameters` applied to the Target Slider game (speed, sharpness, target
-  range, etc.). Parameters may also include `audioMode` (`off`, `immediate`,
-  or `delay`) and `audioDelayMs` to control feedback timing per block.
+  range, etc.).
 - `end` – Copy for the final summary panel.
 
 Each block accumulates per-trial payloads plus the total score, and the client
