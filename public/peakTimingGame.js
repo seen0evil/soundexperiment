@@ -521,7 +521,8 @@ function initPeakTimingGame(){
   // ------- p5 sketch -------
   const sketch = (p) => {
     const W = 640, H = 420;
-    let theta = 0;                 // phase (for rendering)
+    let simTheta = 0;              // continuously advancing phase
+    let renderTheta = 0;           // phase actually drawn
     let ripple = null;             // visual feedback
     let lastSimPerf = performance.now(); // last sim timestamp
 
@@ -556,7 +557,6 @@ function initPeakTimingGame(){
 
         const tPress = performance.now();
         const tEval  = tPress + delayMs; // score time is ALWAYS keypress + delay
-
         if (mode === 'target'){
           targetMode.ensureTrial();
           const frozen = targetMode.freezePlayer();
@@ -620,14 +620,14 @@ function initPeakTimingGame(){
 
       // Peak ring
       p.push();
-      const atPeak = (1 + Math.cos(theta))/2;
+      const atPeak = (1 + Math.cos(renderTheta))/2;
       const glow = p.map(Math.pow(atPeak, 6), 0, 1, 10, 110);
       p.noFill(); p.stroke(122, 162, 255, glow); p.strokeWeight(3);
       p.circle(cx, cy - A, 36);
       p.pop();
 
       // Ball
-      const y = cy - A * Math.cos(theta);
+      const y = cy - A * Math.cos(renderTheta);
       p.noStroke(); p.fill(180, 196, 255); p.circle(cx, y, 26);
 
       // HUD line
@@ -647,7 +647,7 @@ function initPeakTimingGame(){
       p.push(); p.noStroke(); p.fill(20, 30, 70);
       p.rect(bx, y0, bw, h, 10); p.pop();
 
-      const t = (1 - Math.cos(theta))/2; // 0..1, peak at 1
+      const t = (1 - Math.cos(renderTheta))/2; // 0..1, peak at 1
       const innerTop = y0 + pad, innerBot = y0 + h - pad;
       const y = p.lerp(innerBot, innerTop, t);
 
@@ -690,11 +690,13 @@ function initPeakTimingGame(){
       const dtSim = (nowPerf - lastSimPerf) / 1000;
       lastSimPerf = nowPerf;
       const w = omegaNow();
-      theta = (theta + w * dtSim) % (2*Math.PI);
+      simTheta = (simTheta + w * dtSim) % (2*Math.PI);
 
       // Refresh the phase origin so thetaAtTime() can compute future phase
-      phaseAtOrigin = theta;
+      phaseAtOrigin = simTheta;
       phaseOriginPerf = nowPerf;
+
+      renderTheta = simTheta;
 
       if (mode === 'target'){
         targetMode.tick(nowPerf);
@@ -724,7 +726,7 @@ function initPeakTimingGame(){
           let cy = H*0.5;
           if (ripple.mode === 'ball'){
             const A = +ui.amp.value;
-            cy = H*0.5 - A*Math.cos(ripple.theta ?? theta);
+            cy = H*0.5 - A*Math.cos(ripple.theta ?? renderTheta);
           } else {
             const geom = targetTrackGeometry();
             cx = (geom.innerLeft + geom.innerRight) / 2;
