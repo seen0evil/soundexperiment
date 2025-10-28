@@ -344,7 +344,13 @@
     if (block.trialsCompleted >= block.config.trials){
       completeBlock();
     }
-    return { upload: false, trial: context.trial };
+    const trialForUpload = {
+      ...(context.trial || {}),
+      experimentId: state.run.experimentId ?? null,
+      participantId: state.run.participantId ?? null,
+      blockId: block.config?.id ?? null,
+    };
+    return { upload: block.record.upload, trial: trialForUpload };
   }
 
   async function waitForSession(){
