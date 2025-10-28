@@ -32,6 +32,8 @@ CREATE TABLE IF NOT EXISTS trials (
   trial_index INTEGER,
   score REAL,
   judgement TEXT,
+  experiment_id TEXT,
+  participant_id TEXT,
   payload TEXT NOT NULL,
   created_at TEXT NOT NULL,
   FOREIGN KEY(session_id) REFERENCES sessions(id) ON DELETE CASCADE
@@ -55,6 +57,17 @@ CREATE INDEX IF NOT EXISTS idx_results_session ON experiment_results(session_id)
 CREATE INDEX IF NOT EXISTS idx_results_experiment ON experiment_results(experiment_id);
 `);
 
+function ensureColumn(table, column, definition){
+  const info = db.prepare(`PRAGMA table_info(${table})`).all();
+  const exists = info.some((col) => col.name === column);
+  if (!exists){
+    db.exec(`ALTER TABLE ${table} ADD COLUMN ${definition}`);
+  }
+}
+
+ensureColumn('trials', 'experiment_id', 'experiment_id TEXT');
+ensureColumn('trials', 'participant_id', 'participant_id TEXT');
+
 const upsertSession = db.prepare(`
   INSERT INTO sessions (id, created_at, last_seen_at, user_agent, metadata)
   VALUES (@id, @created_at, @last_seen_at, @user_agent, @metadata)
@@ -68,8 +81,8 @@ const updateSessionSeen = db.prepare('UPDATE sessions SET last_seen_at = ? WHERE
 const findSession = db.prepare('SELECT id FROM sessions WHERE id = ?');
 
 const insertTrial = db.prepare(`
-  INSERT INTO trials (session_id, trial_index, score, judgement, payload, created_at)
-  VALUES (@session_id, @trial_index, @score, @judgement, @payload, @created_at)
+  INSERT INTO trials (session_id, trial_index, score, judgement, payload, created_at, experiment_id, participant_id)
+  VALUES (@session_id, @trial_index, @score, @judgement, @payload, @created_at, @experiment_id, @participant_id)
 `);
 
 const insertExperimentResult = db.prepare(`
@@ -129,6 +142,8 @@ app.post('/api/trials', (req, res) => {
   const trialIndex = Number.isFinite(Number(trial.index)) ? Number(trial.index) : null;
   const score = Number.isFinite(Number(trial.score)) ? Number(trial.score) : null;
   const judgement = typeof trial.judgement === 'string' ? trial.judgement.slice(0, 128) : null;
+  const experimentId = typeof trial.experimentId === 'string' ? trial.experimentId.slice(0, 160) : null;
+  const participantId = typeof trial.participantId === 'string' ? trial.participantId.slice(0, 160) : null;
 
   insertTrial.run({
     session_id: sessionId,
@@ -137,6 +152,8 @@ app.post('/api/trials', (req, res) => {
     judgement,
     payload,
     created_at: now,
+    experiment_id: experimentId,
+    participant_id: participantId,
   });
 
   res.status(201).json({ ok: true });
