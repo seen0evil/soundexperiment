@@ -39,6 +39,9 @@
           playerSpeed: 1.0,
           targetMin: 0.6,
           targetMax: 0.9,
+          audioMode: 'immediate',
+          audioDelayMs: 0,
+          audioDurationMs: 120,
         }
       },
       {
@@ -55,6 +58,9 @@
           playerSpeed: 1.0,
           targetMin: 0.6,
           targetMax: 0.9,
+          audioMode: 'delay',
+          audioDelayMs: 250,
+          audioDurationMs: 120,
         }
       }
     ],

@@ -134,7 +134,11 @@
     <div id="po2fr"></div>
     <div id="ev2po"></div>
     <div id="pollLog"></div>
-    <select id="audioMode"><option value="off">off</option></select>
+    <select id="audioMode">
+      <option value="off">No sound</option>
+      <option value="immediate">Immediate at keypress</option>
+      <option value="delay">After delay (align with score)</option>
+    </select>
     <input id="audioDelay" type="range" min="0" max="500" step="5" value="0" />
     <div id="audioDelayVal">0</div>
     <input id="audioDur" type="range" min="5" max="2000" step="5" value="100" />
