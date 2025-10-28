@@ -559,7 +559,7 @@ function initPeakTimingGame(){
         const tEval  = tPress + delayMs; // score time is ALWAYS keypress + delay
         if (mode === 'target'){
           targetMode.ensureTrial();
-          const frozen = targetMode.freezePlayer();
+          const frozen = targetMode.freezePlayer({ revealDelayMs: delayMs });
           if (!frozen){ return; }
         }
 
@@ -666,15 +666,19 @@ function initPeakTimingGame(){
     }
 
     function targetTrackGeometry(){
-      const bw = W * 0.56;
-      const bh = 36;
-      const bx = (W - bw) / 2;
-      const by = (H - bh) / 2;
-      const pad = 28;
+      const Wc = p.width;
+      const Hc = p.height;
+      const trackWidth = Math.round(Wc * 0.56);
+      const trackHeight = Math.round(Math.min(40, Math.max(32, Hc * 0.1)));
+      const bx = Math.round((Wc - trackWidth) / 2);
+      const by = Math.round((Hc - trackHeight) / 2);
+      const maxPad = Math.floor(trackWidth / 2 - 12);
+      const padBase = Math.round(trackWidth * 0.08);
+      const pad = Math.max(24, Math.min(32, maxPad, padBase));
       const innerLeft = bx + pad;
-      const innerRight = bx + bw - pad;
-      const cy = by + bh / 2;
-      return { bx, by, bw, bh, pad, innerLeft, innerRight, cy };
+      const innerRight = bx + trackWidth - pad;
+      const cy = by + trackHeight / 2;
+      return { bx, by, bw: trackWidth, bh: trackHeight, pad, innerLeft, innerRight, cy };
     }
 
     function drawTargetScene(){
