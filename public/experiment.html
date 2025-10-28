@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Structured Peak Timing Experiment</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <script src="https://cdn.jsdelivr.net/npm/p5@1.9.0/lib/p5.min.js"></script>
+  <style>
+    :root {
+      --bg:#070b16;
+      --panel:#101933;
+      --text:#f5f7ff;
+      --muted:#9ba7cc;
+      --accent:#7aa2ff;
+      --danger:#ff7a9e;
+      --success:#5ad1a4;
+    }
+    * { box-sizing: border-box; }
+    body { margin:0; font:16px/1.5 "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background:var(--bg); color:var(--text); }
+    .layout { min-height:100vh; display:flex; flex-direction:column; }
+    header { padding:20px 24px; border-bottom:1px solid rgba(255,255,255,0.06); }
+    header h1 { margin:0; font-size:22px; font-weight:700; letter-spacing:0.3px; }
+    main { flex:1; display:flex; flex-direction:column; align-items:center; gap:18px; padding:24px 16px 64px; }
+    .hud { width:100%; max-width:960px; background:var(--panel); border:1px solid rgba(122,162,255,0.25); border-radius:18px; padding:18px 22px; display:flex; flex-direction:column; gap:12px; }
+    .hud-row { display:flex; flex-wrap:wrap; gap:12px; align-items:center; }
+    .hud-title { font-weight:600; font-size:18px; }
+    .chip { display:inline-flex; align-items:center; gap:6px; padding:6px 12px; border-radius:999px; background:rgba(122,162,255,0.12); color:var(--text); font-size:14px; }
+    .chip strong { font-weight:700; font-size:16px; }
+    .chip[data-state="pending"] { background:rgba(122,162,255,0.24); color:#e6edff; }
+    .chip[data-state="ok"] { background:rgba(90,209,164,0.2); color:#d6fff1; }
+    .chip[data-state="error"] { background:rgba(255,122,158,0.2); color:#ffe9ef; }
+    .chip[data-state="idle"] { background:rgba(122,162,255,0.12); color:var(--muted); }
+    .chip[data-state="warning"] { background:rgba(255,196,122,0.2); color:#ffe9c2; }
+    .canvas-shell { width:100%; max-width:960px; background:var(--panel); border:1px solid rgba(122,162,255,0.25); border-radius:18px; padding:14px; display:flex; flex-direction:column; gap:12px; }
+    #sketch-holder canvas { width:100% !important; height:auto !important; border-radius:12px; border:1px solid rgba(122,162,255,0.35); }
+    .overlay { position:fixed; inset:0; background:rgba(5,8,18,0.84); display:flex; align-items:center; justify-content:center; padding:24px; z-index:10; transition:opacity 0.3s ease; }
+    .overlay.hidden { opacity:0; pointer-events:none; }
+    .overlay-panel { max-width:640px; width:100%; background:linear-gradient(180deg, #131c3f, #0c132a); border:1px solid rgba(122,162,255,0.35); border-radius:22px; padding:32px; box-shadow:0 24px 50px rgba(0,0,0,0.35); display:flex; flex-direction:column; gap:18px; }
+    .overlay-panel h2 { margin:0; font-size:26px; font-weight:700; letter-spacing:0.4px; }
+    .overlay-panel p { margin:0 0 12px; font-size:16px; color:#cfd6ff; }
+    .overlay-panel p:last-child { margin-bottom:0; }
+    .overlay-panel button { align-self:flex-start; background:var(--accent); border:none; color:#050914; font-weight:600; padding:10px 18px; border-radius:12px; cursor:pointer; font-size:15px; transition:transform 0.15s ease, box-shadow 0.15s ease; }
+    .overlay-panel button:hover { transform:translateY(-1px); box-shadow:0 10px 20px rgba(122,162,255,0.25); }
+    .overlay-panel button.disabled { opacity:0.65; cursor:default; transform:none; box-shadow:none; }
+    .participant-form { display:flex; flex-direction:column; gap:8px; margin-top:4px; }
+    .participant-form label { font-size:14px; color:var(--muted); }
+    .participant-form input { border-radius:10px; border:1px solid rgba(122,162,255,0.35); padding:10px; font-size:16px; background:#0d1634; color:var(--text); }
+    .participant-form input:focus { outline:2px solid rgba(122,162,255,0.45); outline-offset:2px; }
+    .participant-form .error { font-size:13px; color:var(--danger); display:none; }
+    .participant-form[data-error="true"] .error { display:block; }
+    .end-summary { background:rgba(12,20,50,0.6); border-radius:14px; padding:16px; }
+    .end-summary dl { margin:0; display:grid; grid-template-columns:auto 1fr; gap:10px 18px; }
+    .end-summary dt { font-weight:600; color:#d7deff; }
+    .end-summary dd { margin:0; color:#b9c3ff; }
+    #controlStubs { display:none; }
+    @media (max-width:640px) {
+      header { padding:16px; }
+      main { padding:20px 12px 48px; }
+      .overlay-panel { padding:24px; }
+      .hud { border-radius:14px; }
+      .canvas-shell { border-radius:14px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <header>
+      <h1>Peak Timing Study</h1>
+    </header>
+    <main>
+      <section class="hud" aria-live="polite">
+        <div class="hud-row">
+          <div class="hud-title" id="hudBlockLabel">Waiting to begin…</div>
+          <div class="chip" id="hudTrialCount">Trials <strong id="hudTrialDone">0</strong>/<span id="hudTrialTotal">0</span></div>
+          <div class="chip">Block score <strong id="hudBlockScore">0</strong></div>
+        </div>
+        <div class="hud-row">
+          <div class="chip">Overall score <strong id="hudOverallScore">0</strong></div>
+          <div class="chip" id="resultStatus" data-state="idle">Results pending</div>
+          <button id="retrySubmit" style="display:none; background:transparent; color:#ffe9ef; border:1px solid rgba(255,122,158,0.6); padding:6px 14px; border-radius:999px; font-size:14px; cursor:pointer;">Retry save</button>
+          <div class="chip" id="syncStatus" data-state="pending">Connecting…</div>
+        </div>
+      </section>
+      <section class="canvas-shell">
+        <div id="sketch-holder"></div>
+      </section>
+    </main>
+    <div class="overlay hidden" id="experimentOverlay" role="dialog" aria-modal="true">
+      <div class="overlay-panel">
+        <h2 id="overlayTitle">Welcome</h2>
+        <div id="overlayBody"></div>
+        <div class="participant-form" id="participantForm">
+          <label for="participantIdInput">Participant ID</label>
+          <input id="participantIdInput" type="text" maxlength="80" autocomplete="off" />
+          <div class="error" id="participantError">Please enter your ID before continuing.</div>
+        </div>
+        <button id="overlayAdvance" type="button">Press space to continue</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="controlStubs">
+    <div id="lastScore">—</div>
+    <div id="judgement">Press to start</div>
+    <input id="speed" type="range" min="0.4" max="3.0" step="0.02" value="1.40" />
+    <div id="speedVal">1.40</div>
+    <input id="sharp" type="range" min="1" max="6" step="0.1" value="2" />
+    <div id="sharpVal">2.0×</div>
+    <input id="amp" type="range" min="60" max="220" step="2" value="140" />
+    <div id="ampVal">140</div>
+    <div id="log"></div>
+    <div id="attempts">0</div>
+    <div id="avg">—</div>
+    <button id="reset" type="button"></button>
+    <button id="modeBall" type="button"></button>
+    <button id="modeBar" type="button"></button>
+    <button id="modeTarget" type="button"></button>
+    <input id="pointsMax" type="range" min="10" max="100" step="5" value="100" />
+    <div id="pointsMaxVal">100</div>
+    <input id="rewardGamma" type="range" min="0.5" max="6" step="0.1" value="2" />
+    <div id="rewardGammaVal">2.0</div>
+    <input id="playerSpeed" type="range" min="0.5" max="3" step="0.1" value="1" />
+    <div id="playerSpeedVal">1.00 s</div>
+    <input id="targetMin" type="range" min="0.6" max="0.9" step="0.01" value="0.60" />
+    <div id="targetMinVal">0.60</div>
+    <input id="targetMax" type="range" min="0.6" max="0.9" step="0.01" value="0.90" />
+    <div id="targetMaxVal">0.90</div>
+    <input id="fps" type="range" min="10" max="240" step="1" value="60" />
+    <div id="fpsVal">60</div>
+    <input id="poll" type="range" min="5" max="1000" step="5" value="250" />
+    <div id="pollVal">250</div>
+    <div id="clock"></div>
+    <div id="ev2fr"></div>
+    <div id="po2fr"></div>
+    <div id="ev2po"></div>
+    <div id="pollLog"></div>
+    <select id="audioMode">
+      <option value="off">No sound</option>
+      <option value="immediate">Immediate at keypress</option>
+      <option value="delay">After delay (align with score)</option>
+    </select>
+    <input id="audioDelay" type="range" min="0" max="500" step="5" value="0" />
+    <div id="audioDelayVal">0</div>
+    <input id="audioDur" type="range" min="5" max="2000" step="5" value="100" />
+    <div id="audioDurVal">100</div>
+    <input id="audioVol" type="range" min="0" max="1" step="0.01" value="1" />
+    <div id="audioVolVal">1.00</div>
+    <input id="audioFile" type="file" />
+    <input id="audioUrl" type="url" />
+    <button id="audioLoadUrl" type="button"></button>
+    <div id="audioStatus"></div>
+  </div>
+
+  <script src="targetMode.js"></script>
+  <script src="peakTimingGame.js"></script>
+  <script src="experimentFlow.js"></script>
+</body>
+</html>

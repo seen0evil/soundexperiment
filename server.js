@@ -38,6 +38,21 @@ CREATE TABLE IF NOT EXISTS trials (
 );
 
 CREATE INDEX IF NOT EXISTS idx_trials_session ON trials(session_id);
+
+CREATE TABLE IF NOT EXISTS experiment_results (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  session_id TEXT NOT NULL,
+  participant_id TEXT,
+  experiment_id TEXT,
+  config_version TEXT,
+  payload TEXT NOT NULL,
+  confirmation_code TEXT,
+  created_at TEXT NOT NULL,
+  FOREIGN KEY(session_id) REFERENCES sessions(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_results_session ON experiment_results(session_id);
+CREATE INDEX IF NOT EXISTS idx_results_experiment ON experiment_results(experiment_id);
 `);
 
 const upsertSession = db.prepare(`
@@ -55,6 +70,11 @@ const findSession = db.prepare('SELECT id FROM sessions WHERE id = ?');
 const insertTrial = db.prepare(`
   INSERT INTO trials (session_id, trial_index, score, judgement, payload, created_at)
   VALUES (@session_id, @trial_index, @score, @judgement, @payload, @created_at)
+`);
+
+const insertExperimentResult = db.prepare(`
+  INSERT INTO experiment_results (session_id, participant_id, experiment_id, config_version, payload, confirmation_code, created_at)
+  VALUES (@session_id, @participant_id, @experiment_id, @config_version, @payload, @confirmation_code, @created_at)
 `);
 
 app.use(express.json({ limit: '1mb' }));
@@ -120,6 +140,51 @@ app.post('/api/trials', (req, res) => {
   });
 
   res.status(201).json({ ok: true });
+});
+
+app.post('/api/experiment-results', (req, res) => {
+  const { sessionId, result } = req.body || {};
+  if (!sessionId || typeof sessionId !== 'string') {
+    return res.status(400).json({ error: 'sessionId is required' });
+  }
+  if (!result || typeof result !== 'object') {
+    return res.status(400).json({ error: 'result payload is required' });
+  }
+
+  const existing = findSession.get(sessionId);
+  if (!existing) {
+    return res.status(404).json({ error: 'Session not found' });
+  }
+
+  let payload;
+  try {
+    payload = JSON.stringify(result);
+  } catch (err) {
+    return res.status(400).json({ error: 'Invalid result payload' });
+  }
+  if (Buffer.byteLength(payload, 'utf8') > 800_000) {
+    return res.status(413).json({ error: 'Result payload too large' });
+  }
+
+  const now = new Date().toISOString();
+  updateSessionSeen.run(now, sessionId);
+
+  const participantId = typeof result.participantId === 'string' ? result.participantId.slice(0, 160) : null;
+  const experimentId = typeof result.experimentId === 'string' ? result.experimentId.slice(0, 160) : null;
+  const configVersion = typeof result.configVersion === 'string' ? result.configVersion.slice(0, 120) : null;
+  const confirmationCode = randomUUID().split('-')[0];
+
+  const info = insertExperimentResult.run({
+    session_id: sessionId,
+    participant_id: participantId,
+    experiment_id: experimentId,
+    config_version: configVersion,
+    payload,
+    confirmation_code: confirmationCode,
+    created_at: now,
+  });
+
+  res.status(201).json({ ok: true, id: info.lastInsertRowid, confirmationCode });
 });
 
 app.get('/api/health', (_req, res) => {
