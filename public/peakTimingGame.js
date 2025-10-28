@@ -56,6 +56,17 @@ function initPeakTimingGame(options = {}){
     }
   }
 
+  function ensureSelectOption(selectEl, value, label){
+    if (!selectEl) return;
+    const exists = Array.from(selectEl.options || []).some((opt) => opt.value === value);
+    if (!exists){
+      const option = document.createElement('option');
+      option.value = value;
+      option.textContent = label ?? value;
+      selectEl.appendChild(option);
+    }
+  }
+
   // ---- Input polling & FPS cap ----
   const fpsEl = document.getElementById('fps');
   const fpsVal = document.getElementById('fpsVal');
@@ -621,6 +632,32 @@ function initPeakTimingGame(options = {}){
       if (rangeTouched){ targetMode.syncTargetRangeInputs(); }
       refreshLabels();
     },
+    setAudioParams(params = {}){
+      if (!params || typeof params !== 'object') return;
+      if (Object.prototype.hasOwnProperty.call(params, 'mode')){
+        const modeValue = params.mode ?? 'off';
+        if (audioControls.mode){
+          const labelMap = {
+            off: 'No sound',
+            immediate: 'Immediate at keypress',
+            delay: 'After delay',
+          };
+          ensureSelectOption(audioControls.mode, modeValue, labelMap[modeValue] || modeValue);
+          audioControls.mode.value = modeValue;
+          try {
+            audioControls.mode.dispatchEvent(new Event('change', { bubbles: true }));
+          } catch (err) {
+            audioControls.mode.dispatchEvent(new Event('change'));
+          }
+        }
+      }
+      if (Object.prototype.hasOwnProperty.call(params, 'delayMs') && params.delayMs != null){
+        setSliderValue(audioControls.delay, params.delayMs);
+      }
+      if (Object.prototype.hasOwnProperty.call(params, 'durationMs') && params.durationMs != null){
+        setSliderValue(audioControls.dur, params.durationMs);
+      }
+    },
     applyParameters(params = {}){
       if (!params || typeof params !== 'object') return;
       if (params.mode) this.setMode(params.mode);
@@ -632,6 +669,11 @@ function initPeakTimingGame(options = {}){
         if (Object.prototype.hasOwnProperty.call(params, key)) targetParams[key] = params[key];
       });
       if (Object.keys(targetParams).length){ this.setTargetParams(targetParams); }
+      const audioParams = {};
+      if (Object.prototype.hasOwnProperty.call(params, 'audioMode')) audioParams.mode = params.audioMode;
+      if (Object.prototype.hasOwnProperty.call(params, 'audioDelayMs')) audioParams.delayMs = params.audioDelayMs;
+      if (Object.prototype.hasOwnProperty.call(params, 'audioDurationMs')) audioParams.durationMs = params.audioDurationMs;
+      if (Object.keys(audioParams).length){ this.setAudioParams(audioParams); }
     },
     lockUi(flag){ lockUiElements(!!flag); },
     setInputEnabled(flag){ gameInputEnabled = !!flag; },
