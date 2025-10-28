@@ -188,6 +188,7 @@
       const reward = Math.round(proximityGamma * pointsMax);
       const colorRGB = targetColorForProximity(proximity);
 
+      const pressSnapshot = state.playerPressSnapshot;
       state.status = 'feedback';
       state.playerFrozenProgress = playerValue;
       state.playerCapturedProgress = null;
@@ -207,6 +208,12 @@
       state.hasOutcome = true;
 
       if (state.analytics){
+        if (state.analytics.freezeEvent){
+          state.analytics.freezeEvent.playerValue = playerValue;
+          if (typeof state.analytics.freezeEvent.playerValueAtPress === 'undefined' && pressSnapshot != null){
+            state.analytics.freezeEvent.playerValueAtPress = pressSnapshot;
+          }
+        }
         state.analytics.feedback = {
           at: now,
           distance,
