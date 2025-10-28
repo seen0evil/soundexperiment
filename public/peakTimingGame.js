@@ -1,4 +1,11 @@
-function initPeakTimingGame(){
+function initPeakTimingGame(options = {}){
+  const opts = {
+    onTrialComplete: typeof options.onTrialComplete === 'function' ? options.onTrialComplete : null,
+    autoUpload: options.autoUpload !== false,
+    initialMode: options.initialMode || 'ball',
+    lockControls: options.lockControls ?? false,
+  };
+
   // ------- UI state & helpers -------
   const ui = {
     lastScore: document.getElementById('lastScore'),
@@ -29,14 +36,24 @@ function initPeakTimingGame(){
   };
 
   function refreshLabels(){
-    ui.speedVal.textContent = (+ui.speed.value).toFixed(2);
-    ui.sharpVal.textContent = (+ui.sharp.value).toFixed(1) + '×';
-    ui.ampVal.textContent = (+ui.amp.value).toFixed(0);
+    if (ui.speedVal && ui.speed) ui.speedVal.textContent = (+ui.speed.value).toFixed(2);
+    if (ui.sharpVal && ui.sharp) ui.sharpVal.textContent = (+ui.sharp.value).toFixed(1) + '×';
+    if (ui.ampVal && ui.amp) ui.ampVal.textContent = (+ui.amp.value).toFixed(0);
     if (ui.pointsMaxVal) ui.pointsMaxVal.textContent = (+ui.pointsMax.value).toFixed(0);
     if (ui.rewardGammaVal) ui.rewardGammaVal.textContent = (+ui.rewardGamma.value).toFixed(2);
     if (ui.playerSpeedVal) ui.playerSpeedVal.textContent = (+ui.playerSpeed.value).toFixed(2) + ' s';
     if (ui.targetMinVal) ui.targetMinVal.textContent = (+ui.targetMin.value).toFixed(2);
     if (ui.targetMaxVal) ui.targetMaxVal.textContent = (+ui.targetMax.value).toFixed(2);
+  }
+
+  function setSliderValue(el, value){
+    if (!el || value == null) return;
+    el.value = String(value);
+    try {
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+    } catch (err) {
+      el.dispatchEvent(new Event('input'));
+    }
   }
 
   // ---- Input polling & FPS cap ----
@@ -66,6 +83,7 @@ function initPeakTimingGame(){
   let targetFrameMs = 1000/60;
 
   let invokePress = null; // assigned inside sketch
+  let gameInputEnabled = true;
 
   function updateClock(){
     const now = performance.now();
@@ -86,7 +104,7 @@ function initPeakTimingGame(){
       pendingPollFrame = true;
       if (lastEventTime != null){ ev2poEl.textContent = Math.round(lastPollTime - lastEventTime) + ' ms'; }
       logLine('event '+Math.round((lastEventTime??t)-appStart)+' → poll '+Math.round(lastPollTime-appStart));
-      if (invokePress){ invokePress(); }
+      if (invokePress && gameInputEnabled){ invokePress(); }
     }
     prevPressed = immediatePressed;
     updateClock();
@@ -282,14 +300,14 @@ function initPeakTimingGame(){
     refreshLabels,
   });
 
-  ui.modeBall.addEventListener('click', () => setMode('ball'));
-  ui.modeBar.addEventListener('click', () => setMode('bar'));
+  ui.modeBall?.addEventListener('click', () => setMode('ball'));
+  ui.modeBar?.addEventListener('click', () => setMode('bar'));
   ui.modeTarget?.addEventListener('click', () => setMode('target'));
   function setMode(m){
     const prev = mode;
     mode = m;
-    ui.modeBall.setAttribute('aria-pressed', m==='ball');
-    ui.modeBar.setAttribute('aria-pressed', m==='bar');
+    ui.modeBall?.setAttribute('aria-pressed', m==='ball');
+    ui.modeBar?.setAttribute('aria-pressed', m==='bar');
     ui.modeTarget?.setAttribute('aria-pressed', m==='target');
     if (mode === 'target'){
       targetMode.enterMode();
@@ -306,6 +324,7 @@ function initPeakTimingGame(){
   let reconnectTimer = null;
   let uploadInFlight = false;
   const trialQueue = [];
+  const sessionListeners = new Set();
 
   try {
     const stored = window.localStorage?.getItem(storageKey);
@@ -339,6 +358,14 @@ function initPeakTimingGame(){
     };
   }
 
+  function notifySessionReady(){
+    if (!sessionReady || !sessionId) return;
+    sessionListeners.forEach((listener) => {
+      try { listener(sessionId); }
+      catch (err) { console.error('session listener failed', err); }
+    });
+  }
+
   async function initSession(){
     if (uploadInFlight) return;
     setSyncStatus('pending', 'Connecting…');
@@ -360,6 +387,7 @@ function initPeakTimingGame(){
       catch (err) { /* ignore */ }
       setSyncStatus('ok', trialQueue.length ? 'Saving…' : 'Connected');
       flushTrialQueue();
+      notifySessionReady();
     } catch (err) {
       console.error('Failed to initialise session', err);
       sessionReady = false;
@@ -405,23 +433,35 @@ function initPeakTimingGame(){
     else if (syncStatusEl?.dataset.state !== 'pending') setSyncStatus('error', 'Offline (queued)');
   }
 
+  const scores = [];
+  function resetScoreboard(){
+    scores.length = 0;
+    if (ui.log) ui.log.innerHTML = '';
+    if (ui.attempts) ui.attempts.textContent = '0';
+    if (ui.avg) ui.avg.textContent = '—';
+    if (ui.lastScore) ui.lastScore.textContent = '—';
+    if (ui.judgement) ui.judgement.textContent = 'Press to start';
+  }
+
   window.addEventListener('online', () => {
     if (!sessionReady) initSession();
   });
 
   initSession();
-
-  const scores = [];
   function pushScore(result){
     const score = result.score;
     scores.push(score);
-    const li = document.createElement('div');
-    li.textContent = score.toFixed(1);
-    ui.log.prepend(li);
-    ui.attempts.textContent = String(scores.length);
-    const avg = scores.reduce((a,b)=>a+b,0)/scores.length;
-    ui.avg.textContent = avg.toFixed(1);
-    if (ui.log.childElementCount>40){ ui.log.removeChild(ui.log.lastChild); }
+    if (ui.log){
+      const li = document.createElement('div');
+      li.textContent = score.toFixed(1);
+      ui.log.prepend(li);
+      if (ui.log.childElementCount>40){ ui.log.removeChild(ui.log.lastChild); }
+    }
+    if (ui.attempts) ui.attempts.textContent = String(scores.length);
+    if (ui.avg){
+      const avg = scores.reduce((a,b)=>a+b,0)/scores.length;
+      ui.avg.textContent = avg.toFixed(1);
+    }
     const settings = {
       mode,
       speed: Number(ui.speed.value),
@@ -455,27 +495,47 @@ function initPeakTimingGame(){
       index: scores.length,
       score,
       judgement: result.judgement,
+      mode,
       settings,
       timings,
       clientTimestamp: new Date().toISOString(),
     };
     if (typeof result.reward === 'number'){ trialPayload.reward = result.reward; }
     if (result.analytics){ trialPayload.analytics = result.analytics; }
-    enqueueTrial(trialPayload);
+    let payloadForUpload = trialPayload;
+    let shouldUpload = opts.autoUpload;
+    if (opts.onTrialComplete){
+      try {
+        const feedback = opts.onTrialComplete({
+          mode,
+          result,
+          trial: payloadForUpload,
+          settings,
+          timings,
+          scores: [...scores],
+        });
+        if (feedback && typeof feedback === 'object'){
+          if (Object.prototype.hasOwnProperty.call(feedback, 'upload')){
+            shouldUpload = !!feedback.upload;
+          }
+          if (feedback.trial && typeof feedback.trial === 'object'){
+            payloadForUpload = feedback.trial;
+          }
+        }
+      } catch (err) {
+        console.error('onTrialComplete callback failed', err);
+      }
+    }
+    if (shouldUpload){
+      enqueueTrial(payloadForUpload);
+    }
   }
 
-  ui.reset.addEventListener('click', ()=>{
-    scores.length = 0;
-    ui.log.innerHTML = '';
-    ui.attempts.textContent = '0';
-    ui.avg.textContent = '—';
-    ui.lastScore.textContent = '—';
-    ui.judgement.textContent = 'Press to start';
-  });
+  ui.reset?.addEventListener('click', resetScoreboard);
 
-  ui.speed.addEventListener('input', refreshLabels);
-  ui.sharp.addEventListener('input', refreshLabels);
-  ui.amp.addEventListener('input', refreshLabels);
+  ui.speed?.addEventListener('input', refreshLabels);
+  ui.sharp?.addEventListener('input', refreshLabels);
+  ui.amp?.addEventListener('input', refreshLabels);
   ui.pointsMax?.addEventListener('input', () => {
     refreshLabels();
     const value = Number(ui.pointsMax.value);
@@ -500,6 +560,104 @@ function initPeakTimingGame(){
     targetMode.recordConfigChange('TARGET_MAX_POS', bounds.max);
   });
   refreshLabels();
+
+  function lockUiElements(disabled){
+    const elements = [
+      ui.speed,
+      ui.sharp,
+      ui.amp,
+      ui.pointsMax,
+      ui.rewardGamma,
+      ui.playerSpeed,
+      ui.targetMin,
+      ui.targetMax,
+      ui.modeBall,
+      ui.modeBar,
+      ui.modeTarget,
+      ui.reset,
+      fpsEl,
+      pollEl,
+      audioControls.mode,
+      audioControls.delay,
+      audioControls.dur,
+      audioControls.vol,
+      audioControls.file,
+      audioControls.url,
+      audioControls.loadUrlBtn,
+    ].filter(Boolean);
+    elements.forEach((el) => {
+      el.disabled = disabled;
+      if (disabled) el.setAttribute('aria-disabled', 'true');
+      else el.removeAttribute('aria-disabled');
+    });
+  }
+
+  const controller = {
+    setMode,
+    getMode: () => mode,
+    setSpeed(value){ setSliderValue(ui.speed, value); },
+    setSharpness(value){ setSliderValue(ui.sharp, value); },
+    setAmplitude(value){ setSliderValue(ui.amp, value); },
+    setTargetParams(params = {}){
+      if (!params || typeof params !== 'object') return;
+      if (Object.prototype.hasOwnProperty.call(params, 'pointsMax')){
+        setSliderValue(ui.pointsMax, params.pointsMax);
+      }
+      if (Object.prototype.hasOwnProperty.call(params, 'rewardGamma')){
+        setSliderValue(ui.rewardGamma, params.rewardGamma);
+      }
+      if (Object.prototype.hasOwnProperty.call(params, 'playerSpeed')){
+        setSliderValue(ui.playerSpeed, params.playerSpeed);
+      }
+      let rangeTouched = false;
+      if (Object.prototype.hasOwnProperty.call(params, 'targetMin')){
+        if (ui.targetMin) ui.targetMin.value = String(params.targetMin);
+        rangeTouched = true;
+      }
+      if (Object.prototype.hasOwnProperty.call(params, 'targetMax')){
+        if (ui.targetMax) ui.targetMax.value = String(params.targetMax);
+        rangeTouched = true;
+      }
+      if (rangeTouched){ targetMode.syncTargetRangeInputs(); }
+      refreshLabels();
+    },
+    applyParameters(params = {}){
+      if (!params || typeof params !== 'object') return;
+      if (params.mode) this.setMode(params.mode);
+      if (Object.prototype.hasOwnProperty.call(params, 'speed')){ this.setSpeed(params.speed); }
+      if (Object.prototype.hasOwnProperty.call(params, 'sharpness')){ this.setSharpness(params.sharpness); }
+      if (Object.prototype.hasOwnProperty.call(params, 'amplitude')){ this.setAmplitude(params.amplitude); }
+      const targetParams = {};
+      ['pointsMax','rewardGamma','playerSpeed','targetMin','targetMax'].forEach((key) => {
+        if (Object.prototype.hasOwnProperty.call(params, key)) targetParams[key] = params[key];
+      });
+      if (Object.keys(targetParams).length){ this.setTargetParams(targetParams); }
+    },
+    lockUi(flag){ lockUiElements(!!flag); },
+    setInputEnabled(flag){ gameInputEnabled = !!flag; },
+    resetScoreboard,
+    getScores: () => [...scores],
+    getSessionId: () => sessionId,
+    isSessionReady: () => sessionReady,
+    onSessionReady(listener){
+      if (typeof listener !== 'function') return () => {};
+      sessionListeners.add(listener);
+      if (sessionReady && sessionId){
+        try { listener(sessionId); }
+        catch (err) { console.error('session listener failed', err); }
+      }
+      return () => { sessionListeners.delete(listener); };
+    },
+    triggerPress(){ if (gameInputEnabled && typeof invokePress === 'function'){ invokePress(); } },
+    getTargetMode: () => targetMode,
+    getTrialQueueLength: () => trialQueue.length,
+  };
+
+  if (opts.lockControls){ controller.lockUi(true); }
+
+  if (opts.initialMode && opts.initialMode !== mode){
+    setMode(opts.initialMode);
+  }
 
   // Prevent page scroll on Space
   document.addEventListener('keydown', (e)=>{
@@ -748,7 +906,9 @@ function initPeakTimingGame(){
   };
 
   // Create p5 instance
-  new p5(sketch);
+  const p5Instance = new p5(sketch);
+  controller.getP5 = () => p5Instance;
+  return controller;
 }
 
 window.initPeakTimingGame = initPeakTimingGame;
