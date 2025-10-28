@@ -274,279 +274,13 @@ function initPeakTimingGame(){
 
   // ------- Game state & buttons -------
   let mode = 'ball';
-  let targetPos = 1; // 0..1 along the slider (left→right)
 
-  const TARGET_TRIAL_MS = 4500;
-  const TARGET_INTER_TRIAL_MS = 700;
-  const TARGET_MOVE_DELAY_MS = 500;
-  const FEEDBACK_FX_MS = 1100;
-
-  const targetGame = {
-    status: 'idle',
-    playerPos: 0.2,
-    playerFrozenPos: null,
-    direction: 1,
-    trialStart: null,
-    timeoutAt: null,
-    nextTrialAt: null,
-    analytics: null,
-    feedback: null,
-    hasOutcome: false,
-    lowerBound: 0,
-    upperBound: 1,
-    moveDelayUntil: null,
-  };
-
-  function targetConfigSnapshot(){
-    return {
-      POINTS_MAX_PER_TRIAL: ui.pointsMax ? Number(ui.pointsMax.value) : null,
-      REWARD_GAMMA: ui.rewardGamma ? Number(ui.rewardGamma.value) : null,
-      PLAYER_TRAVEL_SECONDS: ui.playerSpeed ? Number(ui.playerSpeed.value) : null,
-      TARGET_MIN_POS: ui.targetMin ? Number(ui.targetMin.value) : null,
-      TARGET_MAX_POS: ui.targetMax ? Number(ui.targetMax.value) : null,
-    };
-  }
-
-  function logTargetConfig(action, payload){
-    try {
-      console.log(`[target-config] ${action}`, payload);
-    } catch (err) {
-      /* ignore logging errors */
-    }
-    if (targetGame.analytics){
-      targetGame.analytics.configChanges.push({
-        action,
-        at: performance.now(),
-        payload,
-      });
-    }
-  }
-
-  function randomizeTarget(){
-    const cfg = targetConfigSnapshot();
-    const min = Number.isFinite(cfg.TARGET_MIN_POS) ? cfg.TARGET_MIN_POS : 0;
-    const max = Number.isFinite(cfg.TARGET_MAX_POS) ? cfg.TARGET_MAX_POS : 1;
-    const lo = clamp(min, 0, 1);
-    const hi = clamp(max, 0, 1);
-    const span = Math.max(0, hi - lo);
-    targetPos = lo + (span > 0 ? Math.random() * span : 0);
-  }
-
-  function resetTargetMode(){
-    targetGame.status = 'idle';
-    targetGame.playerFrozenPos = null;
-    targetGame.trialStart = null;
-    targetGame.timeoutAt = null;
-    targetGame.nextTrialAt = null;
-    targetGame.analytics = null;
-    targetGame.feedback = null;
-    targetGame.hasOutcome = false;
-    targetGame.lowerBound = 0;
-    targetGame.upperBound = 1;
-    targetGame.moveDelayUntil = null;
-  }
-
-  function ensureTargetBounds(){
-    if (!ui.targetMin || !ui.targetMax) return;
-    let minVal = Number(ui.targetMin.value);
-    let maxVal = Number(ui.targetMax.value);
-    if (!Number.isFinite(minVal)) minVal = 0;
-    if (!Number.isFinite(maxVal)) maxVal = 1;
-    if (minVal > maxVal){
-      // Adjust the opposing slider to maintain ordering
-      maxVal = minVal;
-      ui.targetMax.value = String(maxVal);
-      if (ui.targetMaxVal) ui.targetMaxVal.textContent = maxVal.toFixed(2);
-      logTargetConfig('change', { field: 'TARGET_MAX_POS', value: maxVal });
-    }
-    if (maxVal < minVal){
-      minVal = maxVal;
-      ui.targetMin.value = String(minVal);
-      if (ui.targetMinVal) ui.targetMinVal.textContent = minVal.toFixed(2);
-      logTargetConfig('change', { field: 'TARGET_MIN_POS', value: minVal });
-    }
-    return { minVal: clamp(minVal, 0, 1), maxVal: clamp(maxVal, 0, 1) };
-  }
-
-  function startTargetTrial(){
-    const now = performance.now();
-    const bounds = ensureTargetBounds();
-    randomizeTarget();
-    const cfg = targetConfigSnapshot();
-    const lower = bounds ? bounds.minVal : clamp(cfg.TARGET_MIN_POS ?? 0, 0, 1);
-    const upper = bounds ? bounds.maxVal : clamp(cfg.TARGET_MAX_POS ?? 1, 0, 1);
-    targetGame.status = 'running';
-    targetGame.trialStart = now;
-    targetGame.timeoutAt = now + TARGET_TRIAL_MS;
-    targetGame.nextTrialAt = null;
-    targetGame.playerFrozenPos = null;
-    targetGame.feedback = null;
-    targetGame.hasOutcome = false;
-    targetGame.direction = 1;
-    targetGame.lowerBound = lower;
-    targetGame.upperBound = Math.max(lower, upper);
-    targetGame.playerPos = clamp(targetGame.lowerBound, 0, 1);
-    targetGame.moveDelayUntil = now + TARGET_MOVE_DELAY_MS;
-    targetGame.analytics = {
-      trialStart: now,
-      configSnapshot: cfg,
-      configChanges: [],
-      target: targetPos,
-      freezeEvent: null,
-      feedback: null,
-    };
-    logTargetConfig('trial_start', { ...cfg, TARGET_VALUE: targetPos });
-  }
-
-  function maybeStartTargetTrial(){
-    if (mode !== 'target') return;
-    if (targetGame.status === 'idle'){ startTargetTrial(); }
-  }
-
-  function targetColorForProximity(proximity){
-    const base = [235, 70, 70];
-    const good = [90, 220, 120];
-    return [
-      Math.round(base[0] + (good[0] - base[0]) * proximity),
-      Math.round(base[1] + (good[1] - base[1]) * proximity),
-      Math.round(base[2] + (good[2] - base[2]) * proximity),
-    ];
-  }
-
-  function freezeTargetPlayer(){
-    if (mode !== 'target') return false;
-    if (targetGame.status !== 'running') return false;
-    targetGame.status = 'frozen';
-    targetGame.playerFrozenPos = targetGame.playerPos;
-    targetGame.timeoutAt = null;
-    const now = performance.now();
-    if (targetGame.analytics){
-      targetGame.analytics.freezeEvent = {
-        at: now,
-        playerValue: targetGame.playerFrozenPos,
-      };
-    }
-    return true;
-  }
-
-  function completeTargetReward(){
-    if (mode !== 'target') return;
-    if (targetGame.playerFrozenPos == null || targetGame.hasOutcome) return;
-    const now = performance.now();
-    const cfg = targetConfigSnapshot();
-    const playerValue = targetGame.playerFrozenPos;
-    const trialTarget = targetPos;
-    const distance = Math.abs(playerValue - trialTarget);
-    const proximity = clamp(1 - distance, 0, 1);
-    const gamma = Number.isFinite(cfg.REWARD_GAMMA) ? cfg.REWARD_GAMMA : 1;
-    const rawPointsMax = Number.isFinite(cfg.POINTS_MAX_PER_TRIAL) ? cfg.POINTS_MAX_PER_TRIAL : 0;
-    const pointsMax = Math.min(100, rawPointsMax);
-    const proximityGamma = Math.pow(proximity, gamma);
-    const reward = Math.round(proximityGamma * pointsMax);
-    const colorRGB = targetColorForProximity(proximity);
-
-    targetGame.status = 'feedback';
-    targetGame.feedback = {
-      startedAt: now,
-      reward,
-      colorRGB,
-      distance,
-      proximity,
-      proximityGamma,
-      playerValue,
-      targetValue: trialTarget,
-      cause: 'press',
-    };
-    targetGame.nextTrialAt = now + FEEDBACK_FX_MS + TARGET_INTER_TRIAL_MS;
-    targetGame.hasOutcome = true;
-    targetGame.playerPos = playerValue;
-
-    const analytics = targetGame.analytics;
-    if (analytics){
-      analytics.feedback = {
-        at: now,
-        distance,
-        proximity,
-        proximityGamma,
-        reward,
-        colorRGB,
-        playerValue,
-        targetValue: trialTarget,
-        cause: 'press',
-      };
-    }
-
-    ui.lastScore.textContent = reward.toFixed(0);
-    ui.judgement.textContent = reward > 0 ? 'Reward' : 'Miss';
-
-    const analyticsPayload = targetGame.analytics;
-    targetGame.analytics = null;
-    pushScore({
-      score: reward,
-      reward,
-      judgement: reward > 0 ? 'Reward' : 'Miss',
-      target: trialTarget,
-      playerValue,
-      analytics: analyticsPayload,
-    });
-  }
-
-  function handleTargetTimeout(){
-    if (mode !== 'target') return;
-    if (targetGame.status !== 'running' || targetGame.hasOutcome) return;
-    const now = performance.now();
-    const colorRGB = targetColorForProximity(0);
-    targetGame.status = 'timeout';
-    targetGame.feedback = {
-      startedAt: now,
-      reward: 0,
-      colorRGB,
-      distance: null,
-      proximity: 0,
-      proximityGamma: 0,
-      playerValue: null,
-      targetValue: targetPos,
-      cause: 'timeout',
-    };
-    targetGame.nextTrialAt = now + FEEDBACK_FX_MS + TARGET_INTER_TRIAL_MS;
-    targetGame.hasOutcome = true;
-    const analyticsPayload = targetGame.analytics;
-    if (analyticsPayload){
-      analyticsPayload.feedback = {
-        at: now,
-        distance: null,
-        proximity: 0,
-        proximityGamma: 0,
-        reward: 0,
-        colorRGB,
-        playerValue: null,
-        targetValue: targetPos,
-        cause: 'timeout',
-      };
-    }
-    ui.lastScore.textContent = '0';
-    ui.judgement.textContent = 'Timeout';
-    targetGame.analytics = null;
-    pushScore({
-      score: 0,
-      reward: 0,
-      judgement: 'Timeout',
-      target: targetPos,
-      playerValue: null,
-      analytics: analyticsPayload,
-    });
-  }
-
-  function maybeScheduleNextTargetTrial(){
-    if (mode !== 'target') return;
-    if (targetGame.status === 'feedback' || targetGame.status === 'timeout'){
-      const now = performance.now();
-      if (targetGame.nextTrialAt != null && now >= targetGame.nextTrialAt){
-        resetTargetMode();
-        startTargetTrial();
-      }
-    }
-  }
+  const targetMode = window.createTargetMode({
+    ui,
+    clamp,
+    pushScore,
+    refreshLabels,
+  });
 
   ui.modeBall.addEventListener('click', () => setMode('ball'));
   ui.modeBar.addEventListener('click', () => setMode('bar'));
@@ -558,10 +292,9 @@ function initPeakTimingGame(){
     ui.modeBar.setAttribute('aria-pressed', m==='bar');
     ui.modeTarget?.setAttribute('aria-pressed', m==='target');
     if (mode === 'target'){
-      resetTargetMode();
-      startTargetTrial();
+      targetMode.enterMode();
     } else if (prev === 'target'){
-      resetTargetMode();
+      targetMode.exitMode();
     }
     refreshLabels();
   }
@@ -702,7 +435,7 @@ function initPeakTimingGame(){
         durationMs: audioControls.dur ? Number(audioControls.dur.value) : null,
         volume: audioControls.vol ? Number(audioControls.vol.value) : null,
       } : null,
-      targetPosition: mode === 'target' ? (result.target ?? targetPos) : null,
+      targetPosition: mode === 'target' ? (result.target ?? targetMode.getTargetValue()) : null,
       playerValue: mode === 'target' ? (result.playerValue ?? null) : null,
       pointsMaxPerTrial: ui.pointsMax ? Number(ui.pointsMax.value) : null,
       rewardGamma: ui.rewardGamma ? Number(ui.rewardGamma.value) : null,
@@ -746,43 +479,25 @@ function initPeakTimingGame(){
   ui.pointsMax?.addEventListener('input', () => {
     refreshLabels();
     const value = Number(ui.pointsMax.value);
-    logTargetConfig('change', { field: 'POINTS_MAX_PER_TRIAL', value });
+    targetMode.recordConfigChange('POINTS_MAX_PER_TRIAL', value);
   });
   ui.rewardGamma?.addEventListener('input', () => {
     refreshLabels();
     const value = Number(ui.rewardGamma.value);
-    logTargetConfig('change', { field: 'REWARD_GAMMA', value });
+    targetMode.recordConfigChange('REWARD_GAMMA', value);
   });
   ui.playerSpeed?.addEventListener('input', () => {
     refreshLabels();
     const value = Number(ui.playerSpeed.value);
-    logTargetConfig('change', { field: 'PLAYER_TRAVEL_SECONDS', value });
+    targetMode.recordConfigChange('PLAYER_TRAVEL_SECONDS', value);
   });
   ui.targetMin?.addEventListener('input', () => {
-    refreshLabels();
-    const bounds = ensureTargetBounds();
-    const value = Number(ui.targetMin.value);
-    logTargetConfig('change', { field: 'TARGET_MIN_POS', value });
-    if (bounds){
-      targetPos = clamp(targetPos, bounds.minVal, bounds.maxVal);
-      targetGame.lowerBound = bounds.minVal;
-      targetGame.upperBound = bounds.maxVal;
-      if (targetGame.playerPos != null) targetGame.playerPos = clamp(targetGame.playerPos, bounds.minVal, bounds.maxVal);
-      if (targetGame.playerFrozenPos != null) targetGame.playerFrozenPos = clamp(targetGame.playerFrozenPos, bounds.minVal, bounds.maxVal);
-    }
+    const bounds = targetMode.syncTargetRangeInputs('min');
+    targetMode.recordConfigChange('TARGET_MIN_POS', bounds.min);
   });
   ui.targetMax?.addEventListener('input', () => {
-    refreshLabels();
-    const bounds = ensureTargetBounds();
-    const value = Number(ui.targetMax.value);
-    logTargetConfig('change', { field: 'TARGET_MAX_POS', value });
-    if (bounds){
-      targetPos = clamp(targetPos, bounds.minVal, bounds.maxVal);
-      targetGame.lowerBound = bounds.minVal;
-      targetGame.upperBound = bounds.maxVal;
-      if (targetGame.playerPos != null) targetGame.playerPos = clamp(targetGame.playerPos, bounds.minVal, bounds.maxVal);
-      if (targetGame.playerFrozenPos != null) targetGame.playerFrozenPos = clamp(targetGame.playerFrozenPos, bounds.minVal, bounds.maxVal);
-    }
+    const bounds = targetMode.syncTargetRangeInputs('max');
+    targetMode.recordConfigChange('TARGET_MAX_POS', bounds.max);
   });
   refreshLabels();
 
@@ -843,8 +558,8 @@ function initPeakTimingGame(){
         const tEval  = tPress + delayMs; // score time is ALWAYS keypress + delay
 
         if (mode === 'target'){
-          maybeStartTargetTrial();
-          const frozen = freezeTargetPlayer();
+          targetMode.ensureTrial();
+          const frozen = targetMode.freezePlayer();
           if (!frozen){ return; }
         }
 
@@ -858,14 +573,14 @@ function initPeakTimingGame(){
         // Schedule the actual scoring at tEval
         scheduleAtPerf(tEval, () => {
           if (mode === 'target'){
-            completeTargetReward();
+            targetMode.completeReward();
             return;
           }
           const thetaEval = thetaAtTime(tEval);
           const sharp = +ui.sharp.value;
 
           let closeness;
-          const trialTarget = targetPos;
+          const trialTarget = targetMode.getTargetValue();
           let playerValue = null;
 
           if (mode === 'ball'){
@@ -964,113 +679,8 @@ function initPeakTimingGame(){
 
     function drawTargetScene(){
       const geom = targetTrackGeometry();
-
-      p.push(); p.noStroke(); p.fill(20, 30, 70);
-      p.rect(geom.bx, geom.by, geom.bw, geom.bh, 10); p.pop();
-
-      maybeStartTargetTrial();
-
-      if (targetGame.status === 'running'){
-        const now = performance.now();
-        if (targetGame.moveDelayUntil != null && now >= targetGame.moveDelayUntil){
-          targetGame.moveDelayUntil = null;
-        }
-        const readyToMove = targetGame.moveDelayUntil == null;
-        const travelSeconds = Number(ui.playerSpeed?.value ?? 0);
-        const lower = clamp(targetGame.lowerBound ?? 0, 0, 1);
-        const upper = clamp(targetGame.upperBound ?? 1, lower, 1);
-        const span = Math.max(upper - lower, 0);
-        if (readyToMove && span > 0 && Number.isFinite(travelSeconds) && travelSeconds > 0){
-          const delta = (span / travelSeconds) * (p.deltaTime / 1000);
-          const proposed = (targetGame.playerPos ?? lower) + targetGame.direction * delta;
-          targetGame.playerPos = clamp(proposed, lower, upper);
-          if (targetGame.playerPos >= upper && upper > lower){ targetGame.direction = -1; }
-          else if (targetGame.playerPos <= lower && upper > lower){ targetGame.direction = 1; }
-        }
-        if (targetGame.timeoutAt != null && now >= targetGame.timeoutAt){
-          handleTargetTimeout();
-        }
-      }
-
-      maybeScheduleNextTargetTrial();
-
-      const playerNormRaw = (targetGame.playerFrozenPos != null) ? targetGame.playerFrozenPos : (targetGame.playerPos ?? targetGame.lowerBound ?? 0);
-      const lowerClamped = clamp(targetGame.lowerBound ?? 0, 0, 1);
-      const upperClamped = clamp(targetGame.upperBound ?? 1, lowerClamped, 1);
-      const playerNorm = clamp(playerNormRaw, lowerClamped, upperClamped);
-      const playerX = p.lerp(geom.innerLeft, geom.innerRight, playerNorm);
-      const targetX = p.lerp(geom.innerLeft, geom.innerRight, clamp(targetPos, 0, 1));
-      const cy = geom.cy;
-
-      p.push(); p.noStroke(); p.fill(122, 162, 255);
-      const barWidth = Math.max(0, playerX - geom.innerLeft);
-      p.rect(geom.innerLeft, geom.by + 6, barWidth, geom.bh - 12, 6); p.pop();
-
-      p.push(); p.noStroke(); p.fill(180, 196, 255);
-      p.circle(playerX, cy, 18);
-      p.pop();
-
-      p.push();
-      p.noFill(); p.stroke(255, 214, 116); p.strokeWeight(3);
-      p.circle(targetX, cy, 26);
-      p.pop();
-
-      if (targetGame.feedback && targetGame.feedback.playerValue != null){
-        const color = targetGame.feedback.colorRGB || [255, 90, 90];
-        p.push();
-        p.stroke(color[0], color[1], color[2], 220);
-        p.strokeWeight(4);
-        p.line(playerX, cy, targetX, cy);
-        p.pop();
-      }
-
-      if (targetGame.status === 'frozen' && targetGame.playerFrozenPos != null && !targetGame.feedback){
-        const color = targetColorForProximity(Math.max(0, 1 - Math.abs(targetGame.playerFrozenPos - targetPos)));
-        p.push();
-        p.stroke(color[0], color[1], color[2], 200);
-        p.strokeWeight(2.5);
-        p.line(playerX, cy, targetX, cy);
-        p.pop();
-      }
-
-      if (targetGame.feedback && targetGame.feedback.cause !== 'timeout'){
-        const age = performance.now() - targetGame.feedback.startedAt;
-        if (age <= FEEDBACK_FX_MS){
-          const t = clamp(1 - age / FEEDBACK_FX_MS, 0, 1);
-          const color = targetGame.feedback.colorRGB || [255, 255, 255];
-          const alpha = Math.round(255 * t);
-          p.push();
-          p.textAlign(p.CENTER, p.BOTTOM);
-          p.textSize(26);
-          p.fill(color[0], color[1], color[2], alpha);
-          p.noStroke();
-          const midX = (playerX + targetX) / 2;
-          p.text(`+${targetGame.feedback.reward} pts`, midX, cy - 18);
-          p.pop();
-        }
-      }
-
-      if (targetGame.status === 'timeout'){
-        const age = targetGame.feedback ? performance.now() - targetGame.feedback.startedAt : 0;
-        const t = clamp(1 - age / FEEDBACK_FX_MS, 0, 1);
-        p.push();
-        p.fill(12, 18, 42, 160);
-        p.noStroke();
-        p.rect(0, 0, W, H, 10);
-        p.pop();
-
-        p.push();
-        p.textAlign(p.CENTER, p.CENTER);
-        p.textSize(30);
-        p.fill(255, 200, 200, Math.round(255 * t));
-        p.text('Timeout', W/2, H/2);
-        p.pop();
-      }
-
-      p.push(); p.noStroke(); p.fill(200, 210, 255);
-      p.textAlign(p.LEFT, p.TOP); p.textSize(14);
-      p.text('Match the target circle’s position on the slider', W*0.5, H*0.22);
-      p.pop();
+      targetMode.ensureTrial();
+      targetMode.draw(p, geom);
     }
 
     p.draw = () => {
@@ -1085,6 +695,10 @@ function initPeakTimingGame(){
       // Refresh the phase origin so thetaAtTime() can compute future phase
       phaseAtOrigin = theta;
       phaseOriginPerf = nowPerf;
+
+      if (mode === 'target'){
+        targetMode.tick(nowPerf);
+      }
 
       // Render gate (FPS cap)
       const shouldRender = (nowPerf - lastRenderAt) >= targetFrameMs;
