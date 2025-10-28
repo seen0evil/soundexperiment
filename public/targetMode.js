@@ -13,7 +13,9 @@
       progressDurationMs: 1000,
       timeoutAt: null,
       nextTrialAt: null,
+      playerPressSnapshot: null,
       playerFrozenProgress: null,
+      pendingRevealAt: null,
       feedback: null,
       hasOutcome: false,
       analytics: null,
@@ -84,7 +86,9 @@
       state.progressDurationMs = 1000;
       state.timeoutAt = null;
       state.nextTrialAt = null;
+      state.playerPressSnapshot = null;
       state.playerFrozenProgress = null;
+      state.pendingRevealAt = null;
       state.feedback = null;
       state.hasOutcome = false;
       state.analytics = null;
@@ -112,7 +116,9 @@
       state.progressDurationMs = durationMs;
       state.timeoutAt = state.progressStartAt + durationMs;
       state.nextTrialAt = null;
+      state.playerPressSnapshot = null;
       state.playerFrozenProgress = null;
+      state.pendingRevealAt = null;
       state.feedback = null;
       state.hasOutcome = false;
       state.analytics = {
@@ -135,16 +141,22 @@
       }
     }
 
-    function freezePlayer(){
+    function freezePlayer(options = {}){
       if (state.status !== 'running') return false;
-      state.status = 'frozen';
-      state.playerFrozenProgress = state.progress;
-      state.timeoutAt = null;
       const now = performance.now();
+      const revealDelayMsRaw = options?.revealDelayMs;
+      const revealDelayMs = Number.isFinite(revealDelayMsRaw) ? Math.max(0, revealDelayMsRaw) : 0;
+      state.status = 'awaiting';
+      state.playerPressSnapshot = state.progress;
+      state.playerFrozenProgress = null;
+      state.timeoutAt = null;
+      state.pendingRevealAt = now + revealDelayMs;
       if (state.analytics){
         state.analytics.freezeEvent = {
           at: now,
-          playerValue: state.playerFrozenProgress,
+          playerValueAtPress: state.playerPressSnapshot,
+          playerValue: state.playerPressSnapshot,
+          revealAt: state.pendingRevealAt,
         };
       }
       return true;
@@ -161,10 +173,15 @@
     }
 
     function completeReward(){
-      if (state.playerFrozenProgress == null || state.hasOutcome) return;
+      if (state.hasOutcome || (state.status !== 'awaiting' && state.status !== 'running')){
+        return;
+      }
+      const playerValueRaw = (state.playerFrozenProgress != null)
+        ? state.playerFrozenProgress
+        : state.progress;
+      const playerValue = clamp(playerValueRaw, 0, 1);
       const now = performance.now();
       const cfg = targetConfigSnapshot();
-      const playerValue = state.playerFrozenProgress;
       const trialTarget = state.targetPos;
       const distance = Math.abs(playerValue - trialTarget);
       const proximity = clamp(1 - distance, 0, 1);
@@ -175,7 +192,12 @@
       const reward = Math.round(proximityGamma * pointsMax);
       const colorRGB = targetColorForProximity(proximity);
 
+      const pressSnapshot = state.playerPressSnapshot;
       state.status = 'feedback';
+      state.playerFrozenProgress = playerValue;
+      state.progress = playerValue;
+      state.playerPressSnapshot = null;
+      state.pendingRevealAt = null;
       state.feedback = {
         startedAt: now,
         reward,
@@ -191,6 +213,12 @@
       state.hasOutcome = true;
 
       if (state.analytics){
+        if (state.analytics.freezeEvent){
+          state.analytics.freezeEvent.playerValue = playerValue;
+          if (typeof state.analytics.freezeEvent.playerValueAtPress === 'undefined' && pressSnapshot != null){
+            state.analytics.freezeEvent.playerValueAtPress = pressSnapshot;
+          }
+        }
         state.analytics.feedback = {
           at: now,
           distance,
@@ -237,6 +265,8 @@
       state.nextTrialAt = now + FEEDBACK_FX_MS + TARGET_INTER_TRIAL_MS;
       state.hasOutcome = true;
       state.progress = 1;
+      state.playerPressSnapshot = null;
+      state.pendingRevealAt = null;
 
       if (state.analytics){
         state.analytics.feedback = {
@@ -268,7 +298,7 @@
     }
 
     function tick(now){
-      if (state.status === 'running'){
+      if (state.status === 'running' || state.status === 'awaiting'){
         if (now < state.progressStartAt){
           state.progress = 0;
         } else {
@@ -276,7 +306,7 @@
           const t = state.progressDurationMs > 0 ? elapsed / state.progressDurationMs : 1;
           state.progress = clamp(t, 0, 1);
         }
-        if (state.timeoutAt != null && now >= state.timeoutAt){
+        if (state.status === 'running' && state.timeoutAt != null && now >= state.timeoutAt){
           handleTimeout(now);
         }
       }
@@ -287,7 +317,9 @@
 
     function draw(p, geom){
       const range = state.range;
-      const progressValue = (state.playerFrozenProgress != null) ? state.playerFrozenProgress : state.progress;
+      const progressValue = (state.playerFrozenProgress != null)
+        ? state.playerFrozenProgress
+        : state.progress;
       const playerNorm = clamp(progressValue, 0, 1);
       const playerX = p.lerp(geom.innerLeft, geom.innerRight, playerNorm);
       const targetX = p.lerp(geom.innerLeft, geom.innerRight, clamp(state.targetPos, range.min, range.max));
@@ -315,16 +347,6 @@
         p.push();
         p.stroke(color[0], color[1], color[2], 220);
         p.strokeWeight(4);
-        p.line(playerX, cy, targetX, cy);
-        p.pop();
-      }
-
-      if (state.status === 'frozen' && state.playerFrozenProgress != null && !state.feedback){
-        const proximity = Math.max(0, 1 - Math.abs(state.playerFrozenProgress - state.targetPos));
-        const color = targetColorForProximity(proximity);
-        p.push();
-        p.stroke(color[0], color[1], color[2], 200);
-        p.strokeWeight(2.5);
         p.line(playerX, cy, targetX, cy);
         p.pop();
       }
@@ -392,7 +414,8 @@
       syncTargetRangeInputs: sanitizeTargetRange,
       getTargetValue(){ return state.targetPos; },
       getPlayerValue(){
-        return (state.playerFrozenProgress != null) ? state.playerFrozenProgress : state.progress;
+        if (state.playerFrozenProgress != null) return state.playerFrozenProgress;
+        return state.progress;
       },
     };
   }
