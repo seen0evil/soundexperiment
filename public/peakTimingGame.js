@@ -787,11 +787,11 @@ function initPeakTimingGame(options = {}){
           return false;           // this is legal again because it's inside the function
         }
       };
-      p.mousePressed  = () => { immediatePressed = true; lastEventTime = performance.now(); pendingEventFrame = true; ensureAudioContext(); };
-      p.touchStarted  = () => { immediatePressed = true; lastEventTime = performance.now(); pendingEventFrame = true; ensureAudioContext(); };
+      //p.mousePressed  = () => { immediatePressed = true; lastEventTime = performance.now(); pendingEventFrame = true; ensureAudioContext(); };
+      //p.touchStarted  = () => { immediatePressed = true; lastEventTime = performance.now(); pendingEventFrame = true; ensureAudioContext(); };
       p.keyReleased   = () => { if (p.key === ' '){ immediatePressed = false; } };
-      p.mouseReleased = () => { immediatePressed = false; };
-      p.touchEnded    = () => { immediatePressed = false; };
+      //p.mouseReleased = () => { immediatePressed = false; };
+      //p.touchEnded    = () => { immediatePressed = false; };
 
 
       // ===== scoring callback now schedules score at (keypress + delay) =====

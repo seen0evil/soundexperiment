@@ -72,7 +72,7 @@
           {
             trials: 20,
             parameters: {
-              audioDelayMs: 100,
+              audioDelayMs: 60,
             }
           }
         ]
@@ -82,7 +82,7 @@
       title: 'All done!',
       body: [
         'Thank you for completing the study.',
-        'Your responses have been recorded. You may now let the researcher know that you have finished.'
+        'Your responses have been recorded. You may now proceed to the survey form.'
       ]
     }
   };
