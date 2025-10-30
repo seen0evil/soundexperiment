@@ -7,8 +7,9 @@
         id: 'welcome',
         title: 'Welcome to the timing study',
         body: [
+          'Please make sure that your sound is turned on, and you can hear the music currently being played.',
           'In this task you will press the space bar to match the position of a moving slider.',
-          'The first block is for practice so you can get comfortable with the controls.'
+          'The first block is for practice so you can get comfortable with the controls. '
         ],
         advanceLabel: 'Begin practice (press space)',
         collectParticipantId: true,
