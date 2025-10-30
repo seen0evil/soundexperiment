@@ -48,7 +48,7 @@
       {
         id: 'experiment',
         label: 'Main experiment',
-        trials: 24,
+        trials: 30,
         upload: true,
         parameters: {
           mode: 'target',
@@ -60,9 +60,22 @@
           targetMin: 0.6,
           targetMax: 0.9,
           audioMode: 'delay',
-          audioDelayMs: 250,
           audioDurationMs: 120,
-        }
+        },
+        segments: [
+          {
+            trials: 10,
+            parameters: {
+              audioDelayMs: 0,
+            }
+          },
+          {
+            trials: 20,
+            parameters: {
+              audioDelayMs: 200,
+            }
+          }
+        ]
       }
     ],
     end: {
@@ -73,6 +86,8 @@
       ]
     }
   };
+
+  const SURVEY_URL = 'https://docs.google.com/forms/d/e/1FAIpQLSfa3kSWdTK9Z5m3ROktDiLnK9fnArW8lB3AOnyLy8n1KQzwMw/viewform';
 
   const dom = {};
   const state = {
@@ -147,14 +162,24 @@
       textContent(dom.hudTrialTotal, '0');
       textContent(dom.hudBlockScore, '0');
     } else {
+      const configuredTotal = (typeof block.totalTrials === 'number' && block.totalTrials > 0)
+        ? block.totalTrials
+        : (Number.isFinite(Number(block.config?.trials)) ? Number(block.config.trials) : 0);
       textContent(dom.hudBlockLabel, block.config.label);
       textContent(dom.hudTrialDone, String(block.trialsCompleted));
-      textContent(dom.hudTrialTotal, String(block.config.trials));
+      textContent(dom.hudTrialTotal, String(configuredTotal));
       textContent(dom.hudBlockScore, block.totalScore.toFixed(1));
     }
     textContent(dom.hudOverallScore, state.run.overallScore.toFixed(1));
     if (dom.hudTrialCount){
-      dom.hudTrialCount.dataset.state = block ? 'pending' : 'idle';
+      if (!block){
+        dom.hudTrialCount.dataset.state = 'idle';
+      } else {
+        const totalTrials = (typeof block.totalTrials === 'number' && block.totalTrials > 0)
+          ? block.totalTrials
+          : (Number.isFinite(Number(block.config?.trials)) ? Number(block.config.trials) : 0);
+        dom.hudTrialCount.dataset.state = (totalTrials > 0 && block.trialsCompleted >= totalTrials) ? 'ok' : 'pending';
+      }
     }
   }
 
@@ -193,6 +218,11 @@
     if (dom.overlayAdvance){
       dom.overlayAdvance.disabled = false;
       dom.overlayAdvance.classList.remove('disabled');
+      dom.overlayAdvance.removeAttribute('hidden');
+    }
+    if (dom.overlaySurvey){
+      dom.overlaySurvey.setAttribute('hidden', '');
+      dom.overlaySurvey.setAttribute('disabled', '');
     }
     if (instruction.collectParticipantId){
       dom.participantForm?.removeAttribute('hidden');
@@ -204,6 +234,7 @@
       }
     } else if (dom.participantForm){
       dom.participantForm.style.display = 'none';
+      dom.participantForm.setAttribute('hidden', '');
     }
     showOverlay();
   }
@@ -255,6 +286,52 @@
     return config.instructions.filter((inst) => !inst.showBefore);
   }
 
+  function normaliseBlockSegments(blockConfig){
+    const baseParameters = { ...(blockConfig?.parameters || {}) };
+    if (!baseParameters.mode){
+      baseParameters.mode = 'target';
+    }
+    const rawSegments = Array.isArray(blockConfig?.segments) ? blockConfig.segments : [];
+    const segments = rawSegments.map((segment) => {
+      const trials = Number(segment?.trials) || 0;
+      if (trials <= 0){
+        return null;
+      }
+      const overrides = (segment && typeof segment.parameters === 'object' && segment.parameters) ? segment.parameters : {};
+      return {
+        trials,
+        parameters: { ...baseParameters, ...overrides },
+      };
+    }).filter(Boolean);
+    if (!segments.length){
+      const fallbackTrials = Number(blockConfig?.trials) > 0 ? Number(blockConfig.trials) : 0;
+      if (fallbackTrials > 0){
+        segments.push({ trials: fallbackTrials, parameters: { ...baseParameters } });
+      }
+    }
+    const totalTrials = segments.reduce((sum, seg) => sum + (Number(seg?.trials) || 0), 0);
+    return {
+      baseParameters,
+      segments,
+      totalTrials,
+    };
+  }
+
+  function enterBlockSegment(blockState, index){
+    if (!blockState) return;
+    if (Array.isArray(blockState.segments) && blockState.segments.length){
+      const segment = blockState.segments[index];
+      if (!segment) return;
+      blockState.segmentIndex = index;
+      blockState.segmentTrialsCompleted = 0;
+      state.controller?.applyParameters(segment.parameters);
+      return;
+    }
+    if (blockState.baseParameters){
+      state.controller?.applyParameters(blockState.baseParameters);
+    }
+  }
+
   function startNextBlock(){
     const blocks = Array.isArray(state.config.blocks) ? state.config.blocks : [];
     state.blockIndex += 1;
@@ -276,12 +353,18 @@
     const controller = state.controller;
     if (!controller) return;
     const now = new Date().toISOString();
+    const segmentInfo = normaliseBlockSegments(blockConfig);
+    const totalTrials = segmentInfo.totalTrials || (Number(blockConfig?.trials) > 0 ? Number(blockConfig.trials) : 0);
     const blockRecord = {
       id: blockConfig.id,
       label: blockConfig.label,
-      trialsTarget: blockConfig.trials,
+      trialsTarget: totalTrials,
       upload: blockConfig.upload !== false,
-      parameters: blockConfig.parameters || {},
+      parameters: { ...(segmentInfo.baseParameters || {}) },
+      segments: segmentInfo.segments.map((segment) => ({
+        trials: segment.trials,
+        parameters: { ...segment.parameters },
+      })),
       trials: [],
       startedAt: now,
       completedAt: null,
@@ -292,14 +375,18 @@
       record: blockRecord,
       trialsCompleted: 0,
       totalScore: 0,
+      totalTrials,
+      segments: segmentInfo.segments,
+      baseParameters: { ...(segmentInfo.baseParameters || {}) },
+      segmentIndex: 0,
+      segmentTrialsCompleted: 0,
     };
     state.run.blocks.push(blockRecord);
     if (!state.run.startedAt){ state.run.startedAt = now; }
-    const params = { mode: 'target', ...(blockConfig.parameters || {}) };
-    controller.applyParameters(params);
     controller.lockUi(true);
     controller.setInputEnabled(true);
     controller.resetScoreboard();
+    enterBlockSegment(state.currentBlock, 0);
     controller.getTargetMode()?.enterMode();
     updateHud();
   }
@@ -309,6 +396,10 @@
     if (!block) return;
     block.record.completedAt = new Date().toISOString();
     block.record.totalScore = block.totalScore;
+    if (!block.record.upload){
+      state.run.overallScore = 0;
+      state.controller?.resetScoreboard();
+    }
     state.currentBlock = null;
     state.controller?.setInputEnabled(false);
     updateHud();
@@ -324,6 +415,19 @@
     block.trialsCompleted += 1;
     block.totalScore += score;
     block.record.totalScore = block.totalScore;
+    const totalTrials = (typeof block.totalTrials === 'number' && block.totalTrials > 0)
+      ? block.totalTrials
+      : (Number.isFinite(Number(block.config?.trials)) ? Number(block.config.trials) : 0);
+    if (Array.isArray(block.segments) && block.segments.length){
+      block.segmentTrialsCompleted = (block.segmentTrialsCompleted || 0) + 1;
+      const currentSegment = block.segments[block.segmentIndex] || null;
+      if (currentSegment && block.trialsCompleted < totalTrials && block.segmentTrialsCompleted >= currentSegment.trials){
+        const nextIndex = block.segmentIndex + 1;
+        if (nextIndex < block.segments.length){
+          enterBlockSegment(block, nextIndex);
+        }
+      }
+    }
     const trialCopy = {
       index: context.trial?.index ?? block.trialsCompleted,
       blockTrialIndex: block.trialsCompleted,
@@ -340,9 +444,9 @@
     state.run.overallScore += score;
     updateHud();
     if (dom.hudTrialCount){
-      dom.hudTrialCount.dataset.state = (block.trialsCompleted >= block.config.trials) ? 'ok' : 'pending';
+      dom.hudTrialCount.dataset.state = (totalTrials > 0 && block.trialsCompleted >= totalTrials) ? 'ok' : 'pending';
     }
-    if (block.trialsCompleted >= block.config.trials){
+    if (totalTrials > 0 && block.trialsCompleted >= totalTrials){
       completeBlock();
     }
     const trialForUpload = {
@@ -402,6 +506,9 @@
         dom.overlayAdvance.classList.remove('disabled');
         dom.overlayAdvance.textContent = 'Close';
       }
+      if (dom.overlaySurvey){
+        dom.overlaySurvey.removeAttribute('disabled');
+      }
     } catch (err) {
       console.error('Failed to submit experiment results', err);
       setResultStatus('error', 'Save failed – retry?');
@@ -409,6 +516,9 @@
         dom.overlayAdvance.disabled = false;
         dom.overlayAdvance.classList.remove('disabled');
         dom.overlayAdvance.textContent = 'Close';
+      }
+      if (dom.overlaySurvey){
+        dom.overlaySurvey.removeAttribute('disabled');
       }
     } finally {
       state.resultSubmitting = false;
@@ -420,6 +530,11 @@
     state.controller?.setInputEnabled(false);
     const end = config.end || {};
     textContent(dom.overlayTitle, end.title || 'Thank you');
+    if (dom.participantForm){
+      dom.participantForm.style.display = 'none';
+      dom.participantForm.setAttribute('hidden', '');
+      dom.participantForm.setAttribute('data-error', 'false');
+    }
     const summaryHtml = `
       <div class="end-summary">
         <dl>
@@ -431,15 +546,43 @@
     `;
     const bodyParts = Array.isArray(end.body) ? end.body : (end.body ? [end.body] : []);
     dom.overlayBody.innerHTML = bodyParts.map((p) => `<p>${p}</p>`).join('') + summaryHtml;
-    textContent(dom.overlayAdvance, 'Close');
+    if (dom.overlayAdvance){
+      textContent(dom.overlayAdvance, 'Close');
+      dom.overlayAdvance.setAttribute('hidden', '');
+      dom.overlayAdvance.disabled = true;
+      dom.overlayAdvance.classList.add('disabled');
+    }
+    if (dom.overlaySurvey){
+      if (SURVEY_URL){
+        dom.overlaySurvey.textContent = 'Open survey';
+        dom.overlaySurvey.setAttribute('disabled', 'true');
+        dom.overlaySurvey.removeAttribute('hidden');
+      } else {
+        dom.overlaySurvey.setAttribute('hidden', '');
+      }
+    }
     showOverlay();
-    dom.overlayAdvance.disabled = true;
-    dom.overlayAdvance.classList.add('disabled');
     submitResults();
+  }
+
+  function openSurvey(){
+    if (!SURVEY_URL) return;
+    const opened = window.open(SURVEY_URL, '_blank', 'noopener');
+    if (!opened){
+      window.location.assign(SURVEY_URL);
+    }
+    try {
+      window.close();
+    } catch (err) {
+      // Ignore browsers that disallow closing tabs we didn't open
+    }
   }
 
   function handleKeydown(event){
     if (event.code === 'Space' && state.overlayVisible){
+      if (!dom.overlayAdvance || dom.overlayAdvance.hasAttribute('hidden') || dom.overlayAdvance.disabled){
+        return;
+      }
       event.preventDefault();
       finishInstruction();
     }
@@ -450,6 +593,7 @@
     dom.overlayTitle = $('overlayTitle');
     dom.overlayBody = $('overlayBody');
     dom.overlayAdvance = $('overlayAdvance');
+    dom.overlaySurvey = $('overlaySurvey');
     dom.participantForm = $('participantForm');
     dom.participantInput = $('participantIdInput');
     dom.resultStatus = $('resultStatus');
@@ -465,6 +609,7 @@
     state.run.configVersion = state.config.configVersion || defaultConfig.configVersion;
 
     dom.overlayAdvance?.addEventListener('click', finishInstruction);
+    dom.overlaySurvey?.addEventListener('click', openSurvey);
     document.addEventListener('keydown', handleKeydown);
     dom.retrySubmit?.addEventListener('click', submitResults);
     setResultStatus('idle', 'Results pending');
