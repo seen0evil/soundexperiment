@@ -39,9 +39,12 @@
     .overlay-panel h2 { margin:0; font-size:26px; font-weight:700; letter-spacing:0.4px; }
     .overlay-panel p { margin:0 0 12px; font-size:16px; color:#cfd6ff; }
     .overlay-panel p:last-child { margin-bottom:0; }
+    .overlay-actions { display:flex; flex-wrap:wrap; gap:12px; }
     .overlay-panel button { align-self:flex-start; background:var(--accent); border:none; color:#050914; font-weight:600; padding:10px 18px; border-radius:12px; cursor:pointer; font-size:15px; transition:transform 0.15s ease, box-shadow 0.15s ease; }
     .overlay-panel button:hover { transform:translateY(-1px); box-shadow:0 10px 20px rgba(122,162,255,0.25); }
     .overlay-panel button.disabled { opacity:0.65; cursor:default; transform:none; box-shadow:none; }
+    .overlay-panel button.secondary { background:transparent; color:var(--text); border:1px solid rgba(122,162,255,0.45); box-shadow:none; }
+    .overlay-panel button.secondary:hover { box-shadow:0 10px 20px rgba(122,162,255,0.15); }
     .participant-form { display:flex; flex-direction:column; gap:8px; margin-top:4px; }
     .participant-form label { font-size:14px; color:var(--muted); }
     .participant-form input { border-radius:10px; border:1px solid rgba(122,162,255,0.35); padding:10px; font-size:16px; background:#0d1634; color:var(--text); }
@@ -94,7 +97,10 @@
           <input id="participantIdInput" type="text" maxlength="80" autocomplete="off" />
           <div class="error" id="participantError">Please enter your ID before continuing.</div>
         </div>
-        <button id="overlayAdvance" type="button">Press space to continue</button>
+        <div class="overlay-actions">
+          <button id="overlayAdvance" type="button">Press space to continue</button>
+          <button id="overlaySurvey" type="button" hidden disabled>Open survey</button>
+        </div>
       </div>
     </div>
   </div>
