@@ -718,36 +718,81 @@ function initPeakTimingGame(options = {}){
     return (theta < 0) ? theta + 2*Math.PI : theta;
   }
 
-  // ------- p5 sketch -------
+  // --- Simulation/render state (global to this sketch) ---
+  let simTheta = 0;                       // radians
+  let renderTheta = 0;                    // radians (what we render this frame)
+  let lastSimPerf = performance.now();    // ms timestamp
+  let ripple = null;                      // ripple feedback object
+
   const sketch = (p) => {
-    const W = 640, H = 420;
-    let simTheta = 0;              // continuously advancing phase
-    let renderTheta = 0;           // phase actually drawn
-    let ripple = null;             // visual feedback
-    let lastSimPerf = performance.now(); // last sim timestamp
+    // ---- Responsive sizing ----
+    const ASPECT = 3.2;       // width / height (wide slider look). Try 16/9, 21/9, etc.
+    const MAX_W  = 1280;      // cap to avoid huge canvases
+    const MIN_W  = 560;       // optional floor so it never gets too tiny
+    let W = 0, H = 0;
+
+    function getShellWidth() {
+      const shell = document.querySelector('.canvas-shell');
+      return shell ? shell.clientWidth : window.innerWidth;
+    }
+
+    function calcCanvasSize() {
+      const avail = getShellWidth();                 // <— use shell width
+      const w = Math.max(MIN_W, Math.min(avail, MAX_W));
+      const h = Math.round(w / ASPECT);
+      return { w, h };
+    }
+
+    function applyCanvasSize(p, cnvEl) {
+      const { w, h } = calcCanvasSize();
+      if (p.width !== w || p.height !== h) p.resizeCanvas(w, h);
+      // lock CSS size to the intrinsic size (prevents blurry upscaling)
+      if (cnvEl) {
+        cnvEl.style.width = w + 'px';
+        cnvEl.style.height = h + 'px';
+      }
+    }
+
+    function observeHolderResize(p, cnvEl) {
+  const holder = document.getElementById('sketch-holder');
+  if (!holder) return;
+  const ro = new ResizeObserver(() => applyCanvasSize(p, cnvEl));
+  ro.observe(holder);
+}
 
     p.setup = () => {
+      const { w, h } = calcCanvasSize();
+      W = w; H = h;
       const cnv = p.createCanvas(W, H);
       cnv.parent('sketch-holder');
-      p.pixelDensity(1);
-      p.frameRate(240); // render cap handled manually
+      //p.pixelDensity(1);
+      p.frameRate(240);
 
-      // Input bindings (event layer only toggles state)
+      const el = cnv.elt;
+      el.style.width = w + 'px';
+      el.style.height = h + 'px';
+
+      observeHolderResize (p,el);
+
+      // safety: if initial layout was late
+      setTimeout(() => applyCanvasSize(p, el), 0);
+      p.windowResized = () => applyCanvasSize(p, el);
+
+      // --- Input bindings must be INSIDE setup ---
       p.keyPressed = () => {
         const tag = document.activeElement?.tagName;
         if (p.key === ' ' && tag !== 'INPUT' && tag !== 'TEXTAREA'){
           immediatePressed = true; lastEventTime = performance.now(); pendingEventFrame = true;
-          ensureAudioContext(); // prime audio
-          return false;
+          ensureAudioContext();
+          return false;           // this is legal again because it's inside the function
         }
       };
-      p.mousePressed = () => { immediatePressed = true; lastEventTime = performance.now(); pendingEventFrame = true; ensureAudioContext(); };
-      p.touchStarted = () => { immediatePressed = true; lastEventTime = performance.now(); pendingEventFrame = true; ensureAudioContext(); };
-
-      // Release handlers
-      p.keyReleased = () => { if (p.key === ' '){ immediatePressed = false; } };
+      p.mousePressed  = () => { immediatePressed = true; lastEventTime = performance.now(); pendingEventFrame = true; ensureAudioContext(); };
+      p.touchStarted  = () => { immediatePressed = true; lastEventTime = performance.now(); pendingEventFrame = true; ensureAudioContext(); };
+      p.keyReleased   = () => { if (p.key === ' '){ immediatePressed = false; } };
       p.mouseReleased = () => { immediatePressed = false; };
-      p.touchEnded = () => { immediatePressed = false; };
+      p.touchEnded    = () => { immediatePressed = false; };
+
 
       // ===== scoring callback now schedules score at (keypress + delay) =====
       invokePress = function(){
@@ -808,6 +853,29 @@ function initPeakTimingGame(options = {}){
         });
       };
     };
+
+    // --- Pause/Resume rendering based on overlay visibility ---
+    function pauseSketch() {
+      if (!p.isLooping()) return;
+      p.noLoop();               // stops draw() updates
+    }
+
+    function resumeSketch() {
+      if (p.isLooping()) return;
+      p.loop();                 // resumes draw() updates
+    }
+
+        // Watch the experiment overlay element
+    const overlay = document.getElementById('experimentOverlay');
+    if (overlay) {
+      const observer = new MutationObserver(() => {
+        const hidden = overlay.classList.contains('hidden');
+        if (hidden) resumeSketch();
+        else pauseSketch();
+      });
+      observer.observe(overlay, { attributes: true, attributeFilter: ['class'] });
+    }
+
 
     function drawBallScene(){
       const cx = W*0.25;
@@ -914,7 +982,7 @@ function initPeakTimingGame(options = {}){
       if (pendingEventFrame){ lastFrameAfterEventTime = nowPerf; ev2frEl.textContent = Math.round(lastFrameAfterEventTime - lastEventTime) + ' ms'; pendingEventFrame = false; }
       if (pendingPollFrame){ lastFrameAfterPollTime = nowPerf; po2frEl.textContent = Math.round(lastFrameAfterPollTime - lastPollTime) + ' ms'; pendingPollFrame = false; }
 
-      p.background(12, 18, 42);
+      p.background(7, 11, 22);
       if (mode === 'ball'){ drawBallScene(); }
       else if (mode === 'bar'){ drawBarScene(); }
       else { drawTargetScene(); }

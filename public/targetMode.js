@@ -412,12 +412,12 @@
         p.textAlign(p.CENTER, p.CENTER);
         p.textSize(30);
         p.fill(255, 200, 200, Math.round(255 * t));
-        p.text('Timeout', p.width/2, p.height/2);
+        p.text('Timeout! Make sure to press spacebar in time!', p.width/2, p.height/2);
         p.pop();
       }
 
       p.push(); p.noStroke(); p.fill(200, 210, 255);
-      p.textAlign(p.LEFT, p.TOP); p.textSize(14);
+      p.textAlign(p.LEFT, p.TOP); p.textSize(20);
       p.text('Match the target circle’s position on the slider', p.width*0.5, p.height*0.22);
       p.pop();
     }

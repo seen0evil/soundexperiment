@@ -31,8 +31,23 @@
     .chip[data-state="error"] { background:rgba(255,122,158,0.2); color:#ffe9ef; }
     .chip[data-state="idle"] { background:rgba(122,162,255,0.12); color:var(--muted); }
     .chip[data-state="warning"] { background:rgba(255,196,122,0.2); color:#ffe9c2; }
-    .canvas-shell { width:100%; max-width:960px; background:var(--panel); border:1px solid rgba(122,162,255,0.25); border-radius:18px; padding:14px; display:flex; flex-direction:column; gap:12px; }
-    #sketch-holder canvas { width:100% !important; height:auto !important; border-radius:12px; border:1px solid rgba(122,162,255,0.35); }
+    .canvas-shell {
+  width:100%;
+  max-width: min(1280px, 96vw);
+  background:transparent; /* remove the blue background */
+  border-radius:0;        /* optional: remove rounded corners */
+  padding:0;              /* optional: remove internal spacing */
+  display:flex;
+  flex-direction:column;
+  gap:12px;
+  align-items:center;
+}
+#sketch-holder {
+  width: 100%;                    /* add this */
+  display: flex;
+  justify-content: center;
+}
+#sketch-holder canvas { display:block; max-width:100%; height:auto !important; border-radius:12px; }
     .overlay { position:fixed; inset:0; background:rgba(5,8,18,0.84); display:flex; align-items:center; justify-content:center; padding:24px; z-index:10; transition:opacity 0.3s ease; }
     .overlay.hidden { opacity:0; pointer-events:none; }
     .overlay-panel { max-width:640px; width:100%; background:linear-gradient(180deg, #131c3f, #0c132a); border:1px solid rgba(122,162,255,0.35); border-radius:22px; padding:32px; box-shadow:0 24px 50px rgba(0,0,0,0.35); display:flex; flex-direction:column; gap:18px; }
