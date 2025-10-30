@@ -320,9 +320,9 @@ function initPeakTimingGame(options = {}){
     ui.modeBall?.setAttribute('aria-pressed', m==='ball');
     ui.modeBar?.setAttribute('aria-pressed', m==='bar');
     ui.modeTarget?.setAttribute('aria-pressed', m==='target');
-    if (mode === 'target'){
+    if (mode === 'target' && prev !== 'target'){
       targetMode.enterMode();
-    } else if (prev === 'target'){
+    } else if (prev === 'target' && mode !== 'target'){
       targetMode.exitMode();
     }
     refreshLabels();
@@ -954,4 +954,3 @@ function initPeakTimingGame(options = {}){
 }
 
 window.initPeakTimingGame = initPeakTimingGame;
-
