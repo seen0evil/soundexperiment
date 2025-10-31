@@ -409,13 +409,6 @@
         p.pop();
 
         p.push();
-        p.noFill();
-        p.stroke(210);
-        p.strokeWeight(2);
-        p.circle(sliderCenterX, cy, 36);
-        p.pop();
-
-        p.push();
         p.noStroke();
         p.fill(235);
         p.circle(sliderCenterX, cy, 6);
