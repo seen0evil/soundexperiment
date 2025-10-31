@@ -679,6 +679,7 @@
         dom.overlaySurvey.setAttribute('hidden', '');
       }
     }
+    setCursorHidden(false);
     showOverlay();
     submitResults();
   }
