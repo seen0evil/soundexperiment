@@ -452,6 +452,9 @@ function initPeakTimingGame(options = {}){
     if (ui.avg) ui.avg.textContent = '—';
     if (ui.lastScore) ui.lastScore.textContent = '—';
     if (ui.judgement) ui.judgement.textContent = 'Press to start';
+    if (targetMode?.setTotalScore){
+      targetMode.setTotalScore(0);
+    }
   }
 
   window.addEventListener('online', () => {
@@ -472,6 +475,10 @@ function initPeakTimingGame(options = {}){
     if (ui.avg){
       const avg = scores.reduce((a,b)=>a+b,0)/scores.length;
       ui.avg.textContent = avg.toFixed(1);
+    }
+    if (targetMode?.setTotalScore){
+      const totalScore = scores.reduce((sum, value) => sum + value, 0);
+      targetMode.setTotalScore(totalScore);
     }
     const settings = {
       mode,
@@ -678,6 +685,11 @@ function initPeakTimingGame(options = {}){
     lockUi(flag){ lockUiElements(!!flag); },
     setInputEnabled(flag){ gameInputEnabled = !!flag; },
     resetScoreboard,
+    setTargetTotalScore(value){
+      if (targetMode?.setTotalScore){
+        targetMode.setTotalScore(value);
+      }
+    },
     getScores: () => [...scores],
     getSessionId: () => sessionId,
     isSessionReady: () => sessionReady,

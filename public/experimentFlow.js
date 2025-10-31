@@ -264,6 +264,7 @@
       textContent(dom.hudBlockScore, block.totalScore.toFixed(1));
     }
     textContent(dom.hudOverallScore, state.run.overallScore.toFixed(1));
+    state.controller?.setTargetTotalScore?.(state.run.overallScore);
     if (dom.hudTrialCount){
       if (!block){
         dom.hudTrialCount.dataset.state = 'idle';
