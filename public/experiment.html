@@ -20,36 +20,26 @@
     * { box-sizing: border-box; }
     body { margin:0; font:16px/1.5 "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background:var(--bg); color:var(--text); }
     .layout { min-height:100vh; display:flex; flex-direction:column; }
-    header { padding:20px 24px; border-bottom:1px solid rgba(255,255,255,0.06); }
+    header { padding:20px 24px; border-bottom:1px solid rgba(255,255,255,0.06); display:flex; flex-direction:column; align-items:center; gap:12px; }
     header h1 { margin:0; font-size:22px; font-weight:700; letter-spacing:0.3px; }
-    main { flex:1; display:flex; flex-direction:column; align-items:center; gap:18px; padding:24px 16px 64px; }
-    .hud { width:100%; max-width:960px; background:var(--panel); border:1px solid var(--panel-border); border-radius:18px; padding:18px 22px; display:flex; flex-direction:column; gap:12px; }
-    .hud-row { display:flex; flex-wrap:wrap; gap:12px; align-items:center; }
-    .hud-title { font-weight:600; font-size:18px; }
-    .chip { display:inline-flex; align-items:center; gap:6px; padding:6px 12px; border-radius:999px; background:rgba(255,255,255,0.08); color:var(--text); font-size:14px; }
-    .chip strong { font-weight:700; font-size:16px; }
-    .chip[data-state="pending"] { background:rgba(255,255,255,0.16); color:#e2e2e2; }
-    .chip[data-state="ok"] { background:rgba(255,255,255,0.2); color:var(--success); }
-    .chip[data-state="error"] { background:rgba(255,255,255,0.12); color:var(--danger); }
-    .chip[data-state="idle"] { background:rgba(255,255,255,0.08); color:var(--muted); }
-    .chip[data-state="warning"] { background:rgba(255,255,255,0.14); color:#d0d0d0; }
-    .canvas-shell {
-  width:100%;
-  max-width: min(1280px, 96vw);
-  background:transparent; /* remove the blue background */
-  border-radius:0;        /* optional: remove rounded corners */
-  padding:0;              /* optional: remove internal spacing */
-  display:flex;
-  flex-direction:column;
-  gap:12px;
-  align-items:center;
-}
-#sketch-holder {
-  width: 100%;                    /* add this */
-  display: flex;
-  justify-content: center;
-}
-#sketch-holder canvas { display:block; max-width:100%; height:auto !important; border-radius:12px; }
+    .header-bar { width:100%; max-width:1080px; margin:0 auto; display:flex; align-items:center; justify-content:center; gap:18px; flex-wrap:wrap; text-align:center; }
+    .header-progress { display:flex; align-items:center; justify-content:center; gap:12px; font-size:16px; color:var(--muted); text-transform:uppercase; letter-spacing:0.6px; }
+    .header-progress strong { color:var(--text); font-weight:700; font-size:18px; letter-spacing:0; text-transform:none; }
+    .header-progress .divider { opacity:0.5; }
+    .header-progress.is-idle .divider { display:none; }
+    .header-progress.is-idle .trial-count { display:none; }
+    .header-progress .trial-count { display:inline-flex; align-items:center; gap:6px; padding:6px 14px; border-radius:999px; background:rgba(255,255,255,0.1); color:var(--text); font-size:15px; text-transform:none; letter-spacing:0.2px; }
+    .header-progress .trial-count strong { font-size:18px; }
+    .header-progress .trial-count[data-state="pending"] { background:rgba(255,255,255,0.16); color:var(--text); }
+    .header-progress .trial-count[data-state="ok"] { background:rgba(255,255,255,0.14); color:var(--success); }
+    .header-progress .trial-count[data-state="idle"] { background:rgba(255,255,255,0.1); color:var(--muted); }
+    main { flex:1; display:flex; flex-direction:column; padding:0; min-height:0; }
+    .canvas-shell { flex:1; position:relative; width:100%; display:flex; align-items:stretch; justify-content:center; padding:0; min-height:0; }
+    #sketch-holder { flex:1; width:100%; height:100%; display:flex; align-items:center; justify-content:center; }
+    #sketch-holder canvas { display:block; max-width:100%; max-height:100%; height:auto !important; border-radius:0; }
+    .score-overlay { position:absolute; top:24px; left:50%; transform:translateX(-50%); display:flex; flex-direction:column; align-items:center; gap:4px; pointer-events:none; text-transform:uppercase; letter-spacing:1px; color:var(--muted); z-index:2; }
+    .score-overlay .score-label { font-size:12px; opacity:0.7; }
+    .score-overlay .score-value { font-size:32px; font-weight:700; color:var(--text); text-transform:none; letter-spacing:0.4px; }
     .overlay { position:fixed; inset:0; background:rgba(0,0,0,0.9); display:flex; align-items:center; justify-content:center; padding:0; z-index:10; transition:opacity 0.3s ease; }
     .overlay.hidden { opacity:0; pointer-events:none; }
     .overlay-panel { width:100%; height:100%; background:var(--overlay-bg); border:none; border-radius:0; padding:clamp(32px, 6vw, 72px); display:flex; flex-direction:column; justify-content:center; align-items:center; gap:24px; text-align:center; }
@@ -81,33 +71,30 @@
     body.cursor-hidden, body.cursor-hidden * { cursor:none !important; }
     @media (max-width:640px) {
       header { padding:16px; }
-      main { padding:20px 12px 48px; }
+      .header-progress { font-size:14px; gap:8px; }
+      .score-overlay { top:16px; }
       .overlay-panel { padding:48px 24px; }
-      .hud { border-radius:14px; }
-      .canvas-shell { border-radius:14px; }
     }
   </style>
 </head>
 <body>
   <div class="layout">
     <header>
-      <h1>Peak Timing Study</h1>
+      <div class="header-bar">
+        <h1>Peak Timing Study</h1>
+        <div class="header-progress is-idle" aria-live="polite">
+          <span class="block-label" id="hudBlockLabel">Waiting to begin…</span>
+          <span class="divider">•</span>
+          <span class="trial-count" id="hudTrialCount" data-state="idle" aria-label="Trial progress"><strong id="hudTrialDone">0</strong>/<span id="hudTrialTotal">0</span></span>
+        </div>
+      </div>
     </header>
     <main>
-      <section class="hud" aria-live="polite">
-        <div class="hud-row">
-          <div class="hud-title" id="hudBlockLabel">Waiting to begin…</div>
-          <div class="chip" id="hudTrialCount">Trials <strong id="hudTrialDone">0</strong>/<span id="hudTrialTotal">0</span></div>
-          <div class="chip">Block score <strong id="hudBlockScore">0</strong></div>
-        </div>
-        <div class="hud-row">
-          <div class="chip">Overall score <strong id="hudOverallScore">0</strong></div>
-          <div class="chip" id="resultStatus" data-state="idle">Results pending</div>
-          <button id="retrySubmit" style="display:none; background:transparent; color:#dfdfdf; border:1px solid rgba(255,255,255,0.3); padding:6px 14px; border-radius:999px; font-size:14px; cursor:pointer;">Retry save</button>
-          <div class="chip" id="syncStatus" data-state="pending">Connecting…</div>
-        </div>
-      </section>
       <section class="canvas-shell">
+        <div class="score-overlay" aria-live="polite">
+          <div class="score-label">Total score</div>
+          <div class="score-value" id="hudOverallScore">0</div>
+        </div>
         <div id="sketch-holder"></div>
       </section>
     </main>

@@ -402,7 +402,7 @@
 
       if (showingIti){
         p.push();
-        p.stroke(96, 124, 210);
+        p.stroke(180);
         p.strokeWeight(4);
         p.line(sliderCenterX - 24, cy, sliderCenterX + 24, cy);
         p.line(sliderCenterX, cy - 24, sliderCenterX, cy + 24);
@@ -410,14 +410,14 @@
 
         p.push();
         p.noFill();
-        p.stroke(152, 172, 238);
+        p.stroke(210);
         p.strokeWeight(2);
         p.circle(sliderCenterX, cy, 36);
         p.pop();
 
         p.push();
         p.noStroke();
-        p.fill(210, 220, 255);
+        p.fill(235);
         p.circle(sliderCenterX, cy, 6);
         p.pop();
         return;
@@ -442,36 +442,26 @@
 
       p.push();
       p.noStroke();
-      p.fill(18, 26, 60);
+      p.fill(28);
       p.rect(sliderLeft, trackTop, trackWidth, trackThickness, trackThickness / 2);
       p.pop();
 
       p.push();
       p.noFill();
-      p.stroke(70, 108, 210);
+      p.stroke(128);
       p.strokeWeight(3);
       p.rect(sliderLeft, trackTop, trackWidth, trackThickness, trackThickness / 2);
       p.pop();
 
       p.push();
-      p.textAlign(p.CENTER, p.TOP);
-      p.textSize(40);
-      p.fill(224, 232, 255);
-      const totalScore = Number.isFinite(state.totalScore) ? state.totalScore : 0;
-      const totalLabel = `Total Score: ${Math.round(totalScore)}`;
-      const labelY = Math.max(24, trackTop - 80);
-      p.text(totalLabel, p.width / 2, labelY);
-      p.pop();
-
-      p.push();
       p.noStroke();
-      p.fill(180, 196, 255);
+      p.fill(235);
       p.circle(playerX, cy, 20);
       p.pop();
 
       p.push();
       p.noFill();
-      p.stroke(255, 214, 116);
+      p.stroke(210);
       p.strokeWeight(3);
       p.circle(targetX, cy, 28);
       p.pop();

@@ -242,37 +242,41 @@
       dom.resultStatus.dataset.state = status;
       dom.resultStatus.textContent = message;
     }
-    if (dom.retrySubmit){
-      dom.retrySubmit.style.display = (status === 'error') ? 'inline-flex' : 'none';
-    }
   }
 
   function updateHud(){
     const block = state.currentBlock;
     if (!block){
+      dom.headerProgress?.classList.add('is-idle');
       textContent(dom.hudBlockLabel, 'Waiting to begin…');
       textContent(dom.hudTrialDone, '0');
       textContent(dom.hudTrialTotal, '0');
-      textContent(dom.hudBlockScore, '0');
     } else {
+      dom.headerProgress?.classList.remove('is-idle');
       const configuredTotal = (typeof block.totalTrials === 'number' && block.totalTrials > 0)
         ? block.totalTrials
         : (Number.isFinite(Number(block.config?.trials)) ? Number(block.config.trials) : 0);
       textContent(dom.hudBlockLabel, block.config.label);
       textContent(dom.hudTrialDone, String(block.trialsCompleted));
       textContent(dom.hudTrialTotal, String(configuredTotal));
-      textContent(dom.hudBlockScore, block.totalScore.toFixed(1));
     }
-    textContent(dom.hudOverallScore, state.run.overallScore.toFixed(1));
+    const roundedOverall = Math.round(state.run.overallScore);
+    textContent(dom.hudOverallScore, roundedOverall.toString());
     state.controller?.setTargetTotalScore?.(state.run.overallScore);
     if (dom.hudTrialCount){
       if (!block){
         dom.hudTrialCount.dataset.state = 'idle';
+        dom.hudTrialCount.setAttribute('aria-label', 'Trial progress');
       } else {
         const totalTrials = (typeof block.totalTrials === 'number' && block.totalTrials > 0)
           ? block.totalTrials
           : (Number.isFinite(Number(block.config?.trials)) ? Number(block.config.trials) : 0);
         dom.hudTrialCount.dataset.state = (totalTrials > 0 && block.trialsCompleted >= totalTrials) ? 'ok' : 'pending';
+        if (totalTrials > 0){
+          dom.hudTrialCount.setAttribute('aria-label', `Trial ${block.trialsCompleted} of ${totalTrials}`);
+        } else {
+          dom.hudTrialCount.setAttribute('aria-label', 'Trial progress');
+        }
       }
     }
   }
@@ -739,12 +743,11 @@
     dom.overlaySurvey = $('overlaySurvey');
     dom.participantForm = $('participantForm');
     dom.participantInput = $('participantIdInput');
-    dom.resultStatus = $('resultStatus');
-    dom.retrySubmit = $('retrySubmit');
+    dom.headerProgress = document.querySelector('.header-progress');
     dom.hudBlockLabel = $('hudBlockLabel');
+    dom.hudTrialCount = $('hudTrialCount');
     dom.hudTrialDone = $('hudTrialDone');
     dom.hudTrialTotal = $('hudTrialTotal');
-    dom.hudBlockScore = $('hudBlockScore');
     dom.hudOverallScore = $('hudOverallScore');
 
     state.config = window.EXPERIMENT_CONFIG || defaultConfig;
@@ -754,7 +757,6 @@
     dom.overlaySurvey?.addEventListener('click', openSurvey);
     document.addEventListener('keydown', handleKeydown, true);
     document.addEventListener('keyup', handleKeyup, true);
-    dom.retrySubmit?.addEventListener('click', submitResults);
     setResultStatus('idle', 'Results pending');
 
     setCursorHidden(false);
