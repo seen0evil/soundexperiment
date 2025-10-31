@@ -2,7 +2,7 @@
   const TARGET_MOVE_DELAY_MS = 500;
   const TARGET_INTER_TRIAL_MS = 700;
   const FEEDBACK_FX_MS = 1100;
-  const BLANK_ITI_MS = 400;
+  const BLANK_ITI_MS = 1000;
   const PREP_STATIONARY_MS = 300;
   const TIMEOUT_LINGER_MS = 2200;
   const MIN_TARGET_POS = 0.6;
