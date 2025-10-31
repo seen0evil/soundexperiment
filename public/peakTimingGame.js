@@ -1035,7 +1035,7 @@ function initPeakTimingGame(options = {}){
       if (pendingEventFrame){ lastFrameAfterEventTime = nowPerf; ev2frEl.textContent = Math.round(lastFrameAfterEventTime - lastEventTime) + ' ms'; pendingEventFrame = false; }
       if (pendingPollFrame){ lastFrameAfterPollTime = nowPerf; po2frEl.textContent = Math.round(lastFrameAfterPollTime - lastPollTime) + ' ms'; pendingPollFrame = false; }
 
-      p.background(0);
+      p.background(6);
       if (mode === 'ball'){ drawBallScene(); }
       else if (mode === 'bar'){ drawBarScene(); }
       else { drawTargetScene(); }

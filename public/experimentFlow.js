@@ -7,13 +7,24 @@
         id: 'welcome',
         title: 'Welcome to the timing study',
         body: [
-          'Please make sure that your sound is turned on, and you can hear the music currently being played.',
-          'In this task you will press the space bar to match the position of a moving slider.',
-          'The first block is for practice so you can get comfortable with the controls. '
+          'Please make sure that your sound is turned on, and pause or mute any background audio.',
+          'Please make remain in full-screen mode throughout the experiment.',
+          'Please enter your Prolific ID.'
         ],
         advanceLabel: 'Begin practice',
         advanceMode: 'button',
         collectParticipantId: true,
+      },
+      {
+        id: 'before-practice',
+        title: 'How perfect is your timing? (5 min)',
+        body: [
+          'On each screen you will see a horizontal bar with a dot on its left side, and a yellow ring on its right side.',
+          'After a short delay, the dot will quickly move rightward toward the yellow ring.',
+          'Your job is to press the spacebar when the dot is *as close as possible* to the center of the ring.  The closer you get, the more points you will score!',
+        ],
+        advanceLabel: 'Press the spacebar to begin the practice trials.',
+        showBefore: 'practice'
       },
       {
         id: 'before-real',
@@ -22,7 +33,7 @@
           'The next block is the real experiment. Do your best to match the highlighted target.',
           'Each successful match adds to your block total.'
         ],
-        advanceLabel: 'Start recorded trials (press space)',
+        advanceLabel: 'Start practice trials (press space)',
         showBefore: 'experiment'
       }
     ],
@@ -661,7 +672,7 @@
     const summaryHtml = `
       <div class="end-summary">
         <dl>
-          <dt>Participant ID</dt><dd>${state.run.participantId ? state.run.participantId : '—'}</dd>
+          <dt>Prolific ID</dt><dd>${state.run.participantId ? state.run.participantId : '—'}</dd>
           <dt>Overall score</dt><dd>${state.run.overallScore.toFixed(1)}</dd>
           <dt>Blocks completed</dt><dd>${state.run.blocks.length}</dd>
         </dl>

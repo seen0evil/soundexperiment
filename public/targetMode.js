@@ -454,7 +454,7 @@
 
       p.push();
       p.noFill();
-      p.stroke(210);
+      p.stroke(255,230,0);
       p.strokeWeight(3);
       p.circle(targetX, cy, 28);
       p.pop();
