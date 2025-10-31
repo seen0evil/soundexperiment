@@ -2,6 +2,9 @@
   const TARGET_MOVE_DELAY_MS = 500;
   const TARGET_INTER_TRIAL_MS = 700;
   const FEEDBACK_FX_MS = 1100;
+  const BLANK_ITI_MS = 400;
+  const PREP_STATIONARY_MS = 300;
+  const TIMEOUT_LINGER_MS = 2200;
   const MIN_TARGET_POS = 0.6;
   const MAX_TARGET_POS = 0.9;
 
@@ -22,6 +25,10 @@
       analytics: null,
       targetPos: MIN_TARGET_POS,
       range: { min: MIN_TARGET_POS, max: MAX_TARGET_POS },
+      sliderVisibleAt: null,
+      prepEndAt: null,
+      trialStart: null,
+      totalScore: 0,
     };
 
     function logTargetConfig(action, payload){
@@ -94,6 +101,10 @@
       state.feedback = null;
       state.hasOutcome = false;
       state.analytics = null;
+      state.sliderVisibleAt = null;
+      state.prepEndAt = null;
+      state.trialStart = null;
+      state.totalScore = 0;
     }
 
     function randomizeTarget(){
@@ -111,10 +122,12 @@
         ? travelSecondsRaw
         : 1;
       const durationMs = travelSeconds * 1000;
-      state.status = 'running';
+      state.status = 'iti';
       state.trialStart = now;
       state.progress = 0;
-      state.progressStartAt = now + TARGET_MOVE_DELAY_MS;
+      state.sliderVisibleAt = now + BLANK_ITI_MS;
+      state.prepEndAt = state.sliderVisibleAt + TARGET_MOVE_DELAY_MS + PREP_STATIONARY_MS;
+      state.progressStartAt = state.prepEndAt;
       state.progressDurationMs = durationMs;
       state.timeoutAt = state.progressStartAt + durationMs;
       state.nextTrialAt = null;
@@ -202,6 +215,11 @@
         Math.round(base[1] + (good[1] - base[1]) * proximity),
         Math.round(base[2] + (good[2] - base[2]) * proximity),
       ];
+    }
+
+    function setTotalScore(value){
+      const numeric = Number(value);
+      state.totalScore = Number.isFinite(numeric) ? numeric : 0;
     }
 
     function completeReward(){
@@ -296,10 +314,12 @@
         targetValue: state.targetPos,
         cause: 'timeout',
       };
-      state.nextTrialAt = now + FEEDBACK_FX_MS + TARGET_INTER_TRIAL_MS;
+      state.nextTrialAt = now + TIMEOUT_LINGER_MS;
       state.hasOutcome = true;
-      state.progress = 1;
+      state.progress = 0;
+      state.timeoutAt = null;
       state.playerCapturedProgress = null;
+      state.playerFrozenProgress = null;
       state.pendingRevealAt = null;
 
       if (state.analytics){
@@ -332,6 +352,17 @@
     }
 
     function tick(now){
+      if (state.status === 'iti'){
+        if (state.sliderVisibleAt != null && now >= state.sliderVisibleAt){
+          state.status = 'prep';
+        }
+      }
+      if (state.status === 'prep'){
+        state.progress = 0;
+        if (state.prepEndAt != null && now >= state.prepEndAt){
+          state.status = 'running';
+        }
+      }
       if (state.status === 'running' || state.status === 'awaiting'){
         state.progress = progressAt(now);
         if (state.status === 'running' && state.timeoutAt != null && now >= state.timeoutAt){
@@ -347,6 +378,14 @@
     }
 
     function draw(p, geom){
+      const now = performance.now();
+      const sliderVisible = state.status === 'prep'
+        || state.status === 'running'
+        || state.status === 'awaiting'
+        || state.status === 'feedback';
+      const showingTimeout = state.status === 'timeout';
+      const showingIti = state.status === 'iti';
+
       const range = state.range;
       const progressValue = (state.playerFrozenProgress != null)
         ? state.playerFrozenProgress
@@ -355,22 +394,86 @@
       const playerX = p.lerp(geom.innerLeft, geom.innerRight, playerNorm);
       const targetX = p.lerp(geom.innerLeft, geom.innerRight, clamp(state.targetPos, range.min, range.max));
       const cy = geom.cy;
+      const sliderLeft = geom.innerLeft;
+      const sliderRight = geom.innerRight;
+      const sliderCenterX = (sliderLeft + sliderRight) / 2;
+      const trackWidth = sliderRight - sliderLeft;
+      const trackThickness = Math.max(14, Math.min(geom.bh - 10, Math.round(trackWidth * 0.08)));
 
-      p.push(); p.noStroke(); p.fill(20, 30, 70);
-      p.rect(geom.bx, geom.by, geom.bw, geom.bh, 10); p.pop();
+      if (showingIti){
+        p.push();
+        p.stroke(96, 124, 210);
+        p.strokeWeight(4);
+        p.line(sliderCenterX - 24, cy, sliderCenterX + 24, cy);
+        p.line(sliderCenterX, cy - 24, sliderCenterX, cy + 24);
+        p.pop();
 
-      p.push(); p.noStroke(); p.fill(122, 162, 255);
-      const totalWidth = geom.innerRight - geom.innerLeft;
-      const barWidth = Math.max(0, totalWidth * playerNorm);
-      p.rect(geom.innerLeft, geom.by + 6, barWidth, geom.bh - 12, 6); p.pop();
+        p.push();
+        p.noFill();
+        p.stroke(152, 172, 238);
+        p.strokeWeight(2);
+        p.circle(sliderCenterX, cy, 36);
+        p.pop();
 
-      p.push(); p.noStroke(); p.fill(180, 196, 255);
-      p.circle(playerX, cy, 18);
+        p.push();
+        p.noStroke();
+        p.fill(210, 220, 255);
+        p.circle(sliderCenterX, cy, 6);
+        p.pop();
+        return;
+      }
+
+      if (showingTimeout){
+        p.push();
+        p.textAlign(p.CENTER, p.CENTER);
+        p.textSize(32);
+        p.fill(255, 186, 186);
+        p.noStroke();
+        p.text('Timeout! Make sure to press spacebar in time!', p.width / 2, p.height / 2);
+        p.pop();
+        return;
+      }
+
+      if (!sliderVisible){
+        return;
+      }
+
+      const trackTop = cy - trackThickness / 2;
+
+      p.push();
+      p.noStroke();
+      p.fill(18, 26, 60);
+      p.rect(sliderLeft, trackTop, trackWidth, trackThickness, trackThickness / 2);
       p.pop();
 
       p.push();
-      p.noFill(); p.stroke(255, 214, 116); p.strokeWeight(3);
-      p.circle(targetX, cy, 26);
+      p.noFill();
+      p.stroke(70, 108, 210);
+      p.strokeWeight(3);
+      p.rect(sliderLeft, trackTop, trackWidth, trackThickness, trackThickness / 2);
+      p.pop();
+
+      p.push();
+      p.textAlign(p.CENTER, p.TOP);
+      p.textSize(40);
+      p.fill(224, 232, 255);
+      const totalScore = Number.isFinite(state.totalScore) ? state.totalScore : 0;
+      const totalLabel = `Total Score: ${Math.round(totalScore)}`;
+      const labelY = Math.max(24, trackTop - 80);
+      p.text(totalLabel, p.width / 2, labelY);
+      p.pop();
+
+      p.push();
+      p.noStroke();
+      p.fill(180, 196, 255);
+      p.circle(playerX, cy, 20);
+      p.pop();
+
+      p.push();
+      p.noFill();
+      p.stroke(255, 214, 116);
+      p.strokeWeight(3);
+      p.circle(targetX, cy, 28);
       p.pop();
 
       if (state.feedback && state.feedback.playerValue != null){
@@ -383,7 +486,7 @@
       }
 
       if (state.feedback && state.feedback.cause !== 'timeout'){
-        const age = performance.now() - state.feedback.startedAt;
+        const age = now - state.feedback.startedAt;
         if (age <= FEEDBACK_FX_MS){
           const t = clamp(1 - age / FEEDBACK_FX_MS, 0, 1);
           const color = state.feedback.colorRGB || [255, 255, 255];
@@ -394,32 +497,10 @@
           p.fill(color[0], color[1], color[2], alpha);
           p.noStroke();
           const midX = (playerX + targetX) / 2;
-          p.text(`+${state.feedback.reward} pts`, midX, cy - 18);
+          p.text(`+${state.feedback.reward} pts`, midX, trackTop - 12);
           p.pop();
         }
       }
-
-      if (state.status === 'timeout'){
-        const age = state.feedback ? performance.now() - state.feedback.startedAt : 0;
-        const t = clamp(1 - age / FEEDBACK_FX_MS, 0, 1);
-        p.push();
-        p.fill(12, 18, 42, 160);
-        p.noStroke();
-        p.rect(0, 0, p.width, p.height, 10);
-        p.pop();
-
-        p.push();
-        p.textAlign(p.CENTER, p.CENTER);
-        p.textSize(30);
-        p.fill(255, 200, 200, Math.round(255 * t));
-        p.text('Timeout! Make sure to press spacebar in time!', p.width/2, p.height/2);
-        p.pop();
-      }
-
-      p.push(); p.noStroke(); p.fill(200, 210, 255);
-      p.textAlign(p.LEFT, p.TOP); p.textSize(20);
-      p.text('Match the target circle’s position on the slider', p.width*0.5, p.height*0.22);
-      p.pop();
     }
 
     function recordConfigChange(field, value){
@@ -441,6 +522,7 @@
       completeReward,
       tick,
       draw,
+      setTotalScore,
       recordConfigChange,
       syncTargetRangeInputs: sanitizeTargetRange,
       getTargetValue(){ return state.targetPos; },
