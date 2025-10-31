@@ -7,13 +7,15 @@
   <script src="https://cdn.jsdelivr.net/npm/p5@1.9.0/lib/p5.min.js"></script>
   <style>
     :root {
-      --bg:#070b16;
-      --panel:#101933;
-      --text:#f5f7ff;
-      --muted:#9ba7cc;
-      --accent:#7aa2ff;
-      --danger:#ff7a9e;
-      --success:#5ad1a4;
+      --bg:#060606;
+      --panel:#121212;
+      --panel-border:rgba(255,255,255,0.08);
+      --text:#f5f5f5;
+      --muted:#a0a0a0;
+      --accent:#d9d9d9;
+      --danger:#c4c4c4;
+      --success:#dedede;
+      --overlay-bg:linear-gradient(180deg, #151515, #0b0b0b);
     }
     * { box-sizing: border-box; }
     body { margin:0; font:16px/1.5 "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background:var(--bg); color:var(--text); }
@@ -21,16 +23,16 @@
     header { padding:20px 24px; border-bottom:1px solid rgba(255,255,255,0.06); }
     header h1 { margin:0; font-size:22px; font-weight:700; letter-spacing:0.3px; }
     main { flex:1; display:flex; flex-direction:column; align-items:center; gap:18px; padding:24px 16px 64px; }
-    .hud { width:100%; max-width:960px; background:var(--panel); border:1px solid rgba(122,162,255,0.25); border-radius:18px; padding:18px 22px; display:flex; flex-direction:column; gap:12px; }
+    .hud { width:100%; max-width:960px; background:var(--panel); border:1px solid var(--panel-border); border-radius:18px; padding:18px 22px; display:flex; flex-direction:column; gap:12px; }
     .hud-row { display:flex; flex-wrap:wrap; gap:12px; align-items:center; }
     .hud-title { font-weight:600; font-size:18px; }
-    .chip { display:inline-flex; align-items:center; gap:6px; padding:6px 12px; border-radius:999px; background:rgba(122,162,255,0.12); color:var(--text); font-size:14px; }
+    .chip { display:inline-flex; align-items:center; gap:6px; padding:6px 12px; border-radius:999px; background:rgba(255,255,255,0.08); color:var(--text); font-size:14px; }
     .chip strong { font-weight:700; font-size:16px; }
-    .chip[data-state="pending"] { background:rgba(122,162,255,0.24); color:#e6edff; }
-    .chip[data-state="ok"] { background:rgba(90,209,164,0.2); color:#d6fff1; }
-    .chip[data-state="error"] { background:rgba(255,122,158,0.2); color:#ffe9ef; }
-    .chip[data-state="idle"] { background:rgba(122,162,255,0.12); color:var(--muted); }
-    .chip[data-state="warning"] { background:rgba(255,196,122,0.2); color:#ffe9c2; }
+    .chip[data-state="pending"] { background:rgba(255,255,255,0.16); color:#e2e2e2; }
+    .chip[data-state="ok"] { background:rgba(255,255,255,0.2); color:var(--success); }
+    .chip[data-state="error"] { background:rgba(255,255,255,0.12); color:var(--danger); }
+    .chip[data-state="idle"] { background:rgba(255,255,255,0.08); color:var(--muted); }
+    .chip[data-state="warning"] { background:rgba(255,255,255,0.14); color:#d0d0d0; }
     .canvas-shell {
   width:100%;
   max-width: min(1280px, 96vw);
@@ -48,33 +50,36 @@
   justify-content: center;
 }
 #sketch-holder canvas { display:block; max-width:100%; height:auto !important; border-radius:12px; }
-    .overlay { position:fixed; inset:0; background:rgba(5,8,18,0.84); display:flex; align-items:center; justify-content:center; padding:24px; z-index:10; transition:opacity 0.3s ease; }
+    .overlay { position:fixed; inset:0; background:rgba(0,0,0,0.9); display:flex; align-items:center; justify-content:center; padding:0; z-index:10; transition:opacity 0.3s ease; }
     .overlay.hidden { opacity:0; pointer-events:none; }
-    .overlay-panel { max-width:640px; width:100%; background:linear-gradient(180deg, #131c3f, #0c132a); border:1px solid rgba(122,162,255,0.35); border-radius:22px; padding:32px; box-shadow:0 24px 50px rgba(0,0,0,0.35); display:flex; flex-direction:column; gap:18px; }
-    .overlay-panel h2 { margin:0; font-size:26px; font-weight:700; letter-spacing:0.4px; }
-    .overlay-panel p { margin:0 0 12px; font-size:16px; color:#cfd6ff; }
+    .overlay-panel { width:100%; height:100%; background:var(--overlay-bg); border:none; border-radius:0; padding:clamp(32px, 6vw, 72px); display:flex; flex-direction:column; justify-content:center; align-items:center; gap:24px; text-align:center; }
+    .overlay-panel h2 { margin:0; font-size:clamp(26px, 4vw, 36px); font-weight:700; letter-spacing:0.4px; }
+    .overlay-panel p { margin:0 0 12px; font-size:18px; color:var(--muted); }
     .overlay-panel p:last-child { margin-bottom:0; }
-    .overlay-actions { display:flex; flex-wrap:wrap; gap:12px; }
-    .overlay-panel button { align-self:flex-start; background:var(--accent); border:none; color:#050914; font-weight:600; padding:10px 18px; border-radius:12px; cursor:pointer; font-size:15px; transition:transform 0.15s ease, box-shadow 0.15s ease; }
-    .overlay-panel button:hover { transform:translateY(-1px); box-shadow:0 10px 20px rgba(122,162,255,0.25); }
-    .overlay-panel button.disabled { opacity:0.65; cursor:default; transform:none; box-shadow:none; }
-    .overlay-panel button.secondary { background:transparent; color:var(--text); border:1px solid rgba(122,162,255,0.45); box-shadow:none; }
-    .overlay-panel button.secondary:hover { box-shadow:0 10px 20px rgba(122,162,255,0.15); }
+    .overlay-actions { display:flex; flex-wrap:wrap; gap:16px; justify-content:center; }
+    .overlay-panel button { background:var(--accent); border:none; color:#111; font-weight:600; padding:12px 22px; border-radius:999px; cursor:pointer; font-size:16px; transition:transform 0.15s ease, box-shadow 0.15s ease; }
+    .overlay-panel button:hover { transform:translateY(-1px); box-shadow:0 18px 36px rgba(0,0,0,0.35); }
+    .overlay-panel button.disabled { opacity:0.5; cursor:default; transform:none; box-shadow:none; }
+    .overlay-panel button.secondary { background:transparent; color:var(--text); border:1px solid rgba(255,255,255,0.2); box-shadow:none; }
+    .overlay-panel button.secondary:hover { box-shadow:0 18px 36px rgba(0,0,0,0.35); }
+    #overlayAdvance { background:transparent; border:none; color:var(--muted); font-weight:500; letter-spacing:0.6px; text-transform:uppercase; pointer-events:none; cursor:default; padding:0; }
+    #overlayAdvance:focus { outline:none; }
     .participant-form { display:flex; flex-direction:column; gap:8px; margin-top:4px; }
     .participant-form label { font-size:14px; color:var(--muted); }
-    .participant-form input { border-radius:10px; border:1px solid rgba(122,162,255,0.35); padding:10px; font-size:16px; background:#0d1634; color:var(--text); }
-    .participant-form input:focus { outline:2px solid rgba(122,162,255,0.45); outline-offset:2px; }
+    .participant-form input { border-radius:10px; border:1px solid rgba(255,255,255,0.2); padding:10px; font-size:16px; background:#1a1a1a; color:var(--text); }
+    .participant-form input:focus { outline:2px solid rgba(255,255,255,0.3); outline-offset:2px; }
     .participant-form .error { font-size:13px; color:var(--danger); display:none; }
     .participant-form[data-error="true"] .error { display:block; }
-    .end-summary { background:rgba(12,20,50,0.6); border-radius:14px; padding:16px; }
+    .end-summary { background:rgba(255,255,255,0.04); border-radius:14px; padding:16px; }
     .end-summary dl { margin:0; display:grid; grid-template-columns:auto 1fr; gap:10px 18px; }
-    .end-summary dt { font-weight:600; color:#d7deff; }
-    .end-summary dd { margin:0; color:#b9c3ff; }
+    .end-summary dt { font-weight:600; color:var(--text); }
+    .end-summary dd { margin:0; color:var(--muted); }
     #controlStubs { display:none; }
+    body.cursor-hidden, body.cursor-hidden * { cursor:none !important; }
     @media (max-width:640px) {
       header { padding:16px; }
       main { padding:20px 12px 48px; }
-      .overlay-panel { padding:24px; }
+      .overlay-panel { padding:48px 24px; }
       .hud { border-radius:14px; }
       .canvas-shell { border-radius:14px; }
     }
@@ -95,7 +100,7 @@
         <div class="hud-row">
           <div class="chip">Overall score <strong id="hudOverallScore">0</strong></div>
           <div class="chip" id="resultStatus" data-state="idle">Results pending</div>
-          <button id="retrySubmit" style="display:none; background:transparent; color:#ffe9ef; border:1px solid rgba(255,122,158,0.6); padding:6px 14px; border-radius:999px; font-size:14px; cursor:pointer;">Retry save</button>
+          <button id="retrySubmit" style="display:none; background:transparent; color:#dfdfdf; border:1px solid rgba(255,255,255,0.3); padding:6px 14px; border-radius:999px; font-size:14px; cursor:pointer;">Retry save</button>
           <div class="chip" id="syncStatus" data-state="pending">Connecting…</div>
         </div>
       </section>
@@ -113,7 +118,7 @@
           <div class="error" id="participantError">Please enter your ID before continuing.</div>
         </div>
         <div class="overlay-actions">
-          <button id="overlayAdvance" type="button">Press space to continue</button>
+          <button id="overlayAdvance" type="button" tabindex="-1">Press space to continue</button>
           <button id="overlaySurvey" type="button" hidden disabled>Open survey</button>
         </div>
       </div>
