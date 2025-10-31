@@ -11,7 +11,8 @@
           'In this task you will press the space bar to match the position of a moving slider.',
           'The first block is for practice so you can get comfortable with the controls. '
         ],
-        advanceLabel: 'Begin practice (press space)',
+        advanceLabel: 'Begin practice',
+        advanceMode: 'button',
         collectParticipantId: true,
       },
       {
@@ -98,8 +99,16 @@
     instructionCallback: null,
     currentInstruction: null,
     currentInstructionMeta: null,
+    currentInstructionAdvanceMode: 'space',
+    advanceClickHandler: null,
+    lastAdvanceTrigger: null,
+    awaitingSpaceRelease: false,
+    awaitingSpaceReleaseCode: null,
+    pendingInputEnable: false,
     blockIndex: -1,
     currentBlock: null,
+    fullscreenRequested: false,
+    cursorHidden: false,
     run: {
       experimentId: null,
       configVersion: null,
@@ -118,6 +127,53 @@
 
   function textContent(el, value){ if (el) el.textContent = value; }
 
+  function setCursorHidden(hidden){
+    state.cursorHidden = hidden;
+    if (!document.body) return;
+    if (hidden){
+      document.body.classList.add('cursor-hidden');
+    } else {
+      document.body.classList.remove('cursor-hidden');
+    }
+  }
+
+  function requestExperimentFullscreen(){
+    if (state.fullscreenRequested) return;
+    const element = document.documentElement;
+    if (!element) return;
+    const request = element.requestFullscreen
+      || element.webkitRequestFullscreen
+      || element.msRequestFullscreen;
+    state.fullscreenRequested = true;
+    if (typeof request === 'function'){
+      try {
+        const result = request.call(element);
+        if (result && typeof result.catch === 'function'){
+          result.catch(() => {});
+        }
+      } catch (err) {
+        // Ignore fullscreen request failures
+      }
+    }
+  }
+
+  function exitExperimentFullscreen(){
+    state.fullscreenRequested = false;
+    const exit = document.exitFullscreen
+      || document.webkitExitFullscreen
+      || document.msExitFullscreen;
+    if (typeof exit === 'function'){
+      try {
+        const result = exit.call(document);
+        if (result && typeof result.catch === 'function'){
+          result.catch(() => {});
+        }
+      } catch (err) {
+        // Ignore fullscreen exit failures
+      }
+    }
+  }
+
   function renderBody(container, instruction){
     if (!container) return;
     if (instruction.html){
@@ -126,6 +182,42 @@
     }
     const fragments = Array.isArray(instruction.body) ? instruction.body : (instruction.body ? [instruction.body] : []);
     container.innerHTML = fragments.map((p) => `<p>${p}</p>`).join('');
+  }
+
+  function detachAdvanceClick(){
+    if (!dom.overlayAdvance) return;
+    if (state.advanceClickHandler){
+      dom.overlayAdvance.removeEventListener('click', state.advanceClickHandler);
+      state.advanceClickHandler = null;
+    }
+  }
+
+  function configureAdvanceControl(mode, label){
+    const advance = dom.overlayAdvance;
+    if (!advance) return;
+    detachAdvanceClick();
+    const resolvedMode = mode === 'button' ? 'button' : 'space';
+    state.currentInstructionAdvanceMode = resolvedMode;
+    advance.disabled = false;
+    advance.classList.remove('disabled');
+    advance.removeAttribute('hidden');
+    advance.textContent = label;
+    advance.dataset.mode = resolvedMode;
+    if (resolvedMode === 'button'){
+      advance.classList.remove('space-advance');
+      advance.removeAttribute('tabindex');
+      advance.removeAttribute('aria-disabled');
+      const handler = () => {
+        state.lastAdvanceTrigger = 'button';
+        finishInstruction();
+      };
+      advance.addEventListener('click', handler);
+      state.advanceClickHandler = handler;
+    } else {
+      advance.classList.add('space-advance');
+      advance.setAttribute('tabindex', '-1');
+      advance.setAttribute('aria-disabled', 'true');
+    }
   }
 
   function showOverlay(){
@@ -142,6 +234,7 @@
     if (!overlay) return;
     overlay.classList.add('hidden');
     state.overlayVisible = false;
+    state.currentInstructionAdvanceMode = 'space';
   }
 
   function setResultStatus(status, message){
@@ -211,14 +304,21 @@
       collectParticipantId: !!instruction.collectParticipantId,
       data: {}
     };
+    state.lastAdvanceTrigger = null;
+    state.awaitingSpaceRelease = false;
+    state.awaitingSpaceReleaseCode = null;
+    state.pendingInputEnable = false;
     textContent(dom.overlayTitle, instruction.title || 'Instruction');
     renderBody(dom.overlayBody, instruction);
-    const label = instruction.advanceLabel || 'Press space to continue';
-    textContent(dom.overlayAdvance, label);
-    if (dom.overlayAdvance){
-      dom.overlayAdvance.disabled = false;
-      dom.overlayAdvance.classList.remove('disabled');
-      dom.overlayAdvance.removeAttribute('hidden');
+    const requestedMode = typeof instruction.advanceMode === 'string' ? instruction.advanceMode : null;
+    const resolvedMode = (requestedMode === 'button' || requestedMode === 'space')
+      ? requestedMode
+      : (instruction.collectParticipantId ? 'button' : 'space');
+    const label = instruction.advanceLabel
+      || (resolvedMode === 'button' ? 'Continue' : 'Press space to continue');
+    configureAdvanceControl(resolvedMode, label);
+    if (resolvedMode === 'button' && !instruction.collectParticipantId){
+      dom.overlayAdvance?.focus();
     }
     if (dom.overlaySurvey){
       dom.overlaySurvey.setAttribute('hidden', '');
@@ -253,6 +353,7 @@
       if (!value){
         dom.participantForm?.setAttribute('data-error', 'true');
         dom.participantInput.focus();
+        state.lastAdvanceTrigger = null;
         return;
       }
       state.run.participantId = value;
@@ -262,6 +363,13 @@
       meta.completedAt = new Date().toISOString();
       recordInstructionEvent(meta);
     }
+    const advancedWithSpace = state.lastAdvanceTrigger === 'space';
+    if (!state.fullscreenRequested && advancedWithSpace){
+      requestExperimentFullscreen();
+      if (!state.cursorHidden){
+        setCursorHidden(true);
+      }
+    }
     state.currentInstruction = null;
     state.currentInstructionMeta = null;
     dom.participantForm?.setAttribute('data-error', 'false');
@@ -270,6 +378,15 @@
       presentInstruction(next);
       return;
     }
+    if (state.lastAdvanceTrigger === 'space'){
+      state.awaitingSpaceRelease = true;
+      state.awaitingSpaceReleaseCode = 'Space';
+    } else {
+      state.awaitingSpaceRelease = false;
+      state.awaitingSpaceReleaseCode = null;
+    }
+    state.lastAdvanceTrigger = null;
+    detachAdvanceClick();
     hideOverlay();
     const cb = state.instructionCallback;
     state.instructionCallback = null;
@@ -384,7 +501,13 @@
     state.run.blocks.push(blockRecord);
     if (!state.run.startedAt){ state.run.startedAt = now; }
     controller.lockUi(true);
-    controller.setInputEnabled(true);
+    const enableInputNow = !state.awaitingSpaceRelease;
+    controller.setInputEnabled(enableInputNow);
+    state.pendingInputEnable = !enableInputNow;
+    if (enableInputNow){
+      state.awaitingSpaceRelease = false;
+      state.awaitingSpaceReleaseCode = null;
+    }
     controller.resetScoreboard();
     enterBlockSegment(state.currentBlock, 0);
     controller.getTargetMode()?.enterMode();
@@ -528,6 +651,10 @@
   function showEndScreen(){
     const config = state.config;
     state.controller?.setInputEnabled(false);
+    detachAdvanceClick();
+    state.awaitingSpaceRelease = false;
+    state.awaitingSpaceReleaseCode = null;
+    state.pendingInputEnable = false;
     const end = config.end || {};
     textContent(dom.overlayTitle, end.title || 'Thank you');
     if (dom.participantForm){
@@ -568,6 +695,8 @@
   function openSurvey(){
     if (!SURVEY_URL) return;
     const opened = window.open(SURVEY_URL, '_blank', 'noopener');
+    setCursorHidden(false);
+    exitExperimentFullscreen();
     if (!opened){
       window.location.assign(SURVEY_URL);
     }
@@ -580,12 +709,33 @@
 
   function handleKeydown(event){
     if (event.code === 'Space' && state.overlayVisible){
+      if (state.currentInstructionAdvanceMode !== 'space'){
+        return;
+      }
       if (!dom.overlayAdvance || dom.overlayAdvance.hasAttribute('hidden') || dom.overlayAdvance.disabled){
         return;
       }
       event.preventDefault();
+      if (typeof event.stopImmediatePropagation === 'function'){ event.stopImmediatePropagation(); }
+      else if (typeof event.stopPropagation === 'function'){ event.stopPropagation(); }
+      state.lastAdvanceTrigger = 'space';
       finishInstruction();
     }
+  }
+
+  function handleKeyup(event){
+    if (!state.awaitingSpaceRelease){
+      return;
+    }
+    if (event.code !== state.awaitingSpaceReleaseCode){
+      return;
+    }
+    state.awaitingSpaceRelease = false;
+    state.awaitingSpaceReleaseCode = null;
+    if (state.pendingInputEnable && state.controller){
+      state.controller.setInputEnabled(true);
+    }
+    state.pendingInputEnable = false;
   }
 
   function initialise(){
@@ -608,11 +758,13 @@
     state.run.experimentId = state.config.experimentId || defaultConfig.experimentId;
     state.run.configVersion = state.config.configVersion || defaultConfig.configVersion;
 
-    dom.overlayAdvance?.addEventListener('click', finishInstruction);
     dom.overlaySurvey?.addEventListener('click', openSurvey);
-    document.addEventListener('keydown', handleKeydown);
+    document.addEventListener('keydown', handleKeydown, true);
+    document.addEventListener('keyup', handleKeyup, true);
     dom.retrySubmit?.addEventListener('click', submitResults);
     setResultStatus('idle', 'Results pending');
+
+    setCursorHidden(false);
 
     const controller = window.initPeakTimingGame({
       initialMode: 'target',
