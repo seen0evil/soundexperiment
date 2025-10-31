@@ -41,7 +41,7 @@
       {
         id: 'practice',
         label: 'Practice block',
-        trials: 6,
+        trials: 5,
         upload: false,
         parameters: {
           mode: 'target',
@@ -60,7 +60,7 @@
       {
         id: 'experiment',
         label: 'Main experiment',
-        trials: 30,
+        trials: 10,
         upload: true,
         parameters: {
           mode: 'target',
@@ -76,13 +76,13 @@
         },
         segments: [
           {
-            trials: 10,
+            trials: 5,
             parameters: {
               audioDelayMs: 0,
             }
           },
           {
-            trials: 20,
+            trials: 5,
             parameters: {
               audioDelayMs: 60,
             }
@@ -702,17 +702,9 @@
 
   function openSurvey(){
     if (!SURVEY_URL) return;
-    const opened = window.open(SURVEY_URL, '_blank', 'noopener');
     setCursorHidden(false);
     exitExperimentFullscreen();
-    if (!opened){
-      window.location.assign(SURVEY_URL);
-    }
-    try {
-      window.close();
-    } catch (err) {
-      // Ignore browsers that disallow closing tabs we didn't open
-    }
+    window.location.assign(SURVEY_URL);  // open in same tab only
   }
 
   function handleKeydown(event){
