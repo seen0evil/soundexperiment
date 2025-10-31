@@ -100,6 +100,8 @@
     currentInstructionMeta: null,
     blockIndex: -1,
     currentBlock: null,
+    fullscreenRequested: false,
+    cursorHidden: false,
     run: {
       experimentId: null,
       configVersion: null,
@@ -117,6 +119,53 @@
   function $(id){ return document.getElementById(id); }
 
   function textContent(el, value){ if (el) el.textContent = value; }
+
+  function setCursorHidden(hidden){
+    state.cursorHidden = hidden;
+    if (!document.body) return;
+    if (hidden){
+      document.body.classList.add('cursor-hidden');
+    } else {
+      document.body.classList.remove('cursor-hidden');
+    }
+  }
+
+  function requestExperimentFullscreen(){
+    if (state.fullscreenRequested) return;
+    const element = document.documentElement;
+    if (!element) return;
+    const request = element.requestFullscreen
+      || element.webkitRequestFullscreen
+      || element.msRequestFullscreen;
+    state.fullscreenRequested = true;
+    if (typeof request === 'function'){
+      try {
+        const result = request.call(element);
+        if (result && typeof result.catch === 'function'){
+          result.catch(() => {});
+        }
+      } catch (err) {
+        // Ignore fullscreen request failures
+      }
+    }
+  }
+
+  function exitExperimentFullscreen(){
+    state.fullscreenRequested = false;
+    const exit = document.exitFullscreen
+      || document.webkitExitFullscreen
+      || document.msExitFullscreen;
+    if (typeof exit === 'function'){
+      try {
+        const result = exit.call(document);
+        if (result && typeof result.catch === 'function'){
+          result.catch(() => {});
+        }
+      } catch (err) {
+        // Ignore fullscreen exit failures
+      }
+    }
+  }
 
   function renderBody(container, instruction){
     if (!container) return;
@@ -261,6 +310,12 @@
     if (meta){
       meta.completedAt = new Date().toISOString();
       recordInstructionEvent(meta);
+    }
+    if (!state.fullscreenRequested){
+      requestExperimentFullscreen();
+      if (!state.cursorHidden){
+        setCursorHidden(true);
+      }
     }
     state.currentInstruction = null;
     state.currentInstructionMeta = null;
@@ -568,6 +623,8 @@
   function openSurvey(){
     if (!SURVEY_URL) return;
     const opened = window.open(SURVEY_URL, '_blank', 'noopener');
+    setCursorHidden(false);
+    exitExperimentFullscreen();
     if (!opened){
       window.location.assign(SURVEY_URL);
     }
@@ -608,11 +665,12 @@
     state.run.experimentId = state.config.experimentId || defaultConfig.experimentId;
     state.run.configVersion = state.config.configVersion || defaultConfig.configVersion;
 
-    dom.overlayAdvance?.addEventListener('click', finishInstruction);
     dom.overlaySurvey?.addEventListener('click', openSurvey);
     document.addEventListener('keydown', handleKeydown);
     dom.retrySubmit?.addEventListener('click', submitResults);
     setResultStatus('idle', 'Results pending');
+
+    setCursorHidden(false);
 
     const controller = window.initPeakTimingGame({
       initialMode: 'target',
