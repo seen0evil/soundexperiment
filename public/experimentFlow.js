@@ -310,16 +310,8 @@
     state.pendingInputEnable = false;
     textContent(dom.overlayTitle, instruction.title || 'Instruction');
     renderBody(dom.overlayBody, instruction);
-    const requestedMode = typeof instruction.advanceMode === 'string' ? instruction.advanceMode : null;
-    const resolvedMode = (requestedMode === 'button' || requestedMode === 'space')
-      ? requestedMode
-      : (instruction.collectParticipantId ? 'button' : 'space');
-    const label = instruction.advanceLabel
-      || (resolvedMode === 'button' ? 'Continue' : 'Press space to continue');
-    configureAdvanceControl(resolvedMode, label);
-    if (resolvedMode === 'button' && !instruction.collectParticipantId){
-      dom.overlayAdvance?.focus();
-    }
+    const label = instruction.advanceLabel || 'Press space to continue';
+    configureAdvanceControl(instruction.advanceMode || 'space', label);
     if (dom.overlaySurvey){
       dom.overlaySurvey.setAttribute('hidden', '');
       dom.overlaySurvey.setAttribute('disabled', '');
@@ -363,8 +355,7 @@
       meta.completedAt = new Date().toISOString();
       recordInstructionEvent(meta);
     }
-    const advancedWithSpace = state.lastAdvanceTrigger === 'space';
-    if (!state.fullscreenRequested && advancedWithSpace){
+    if (!state.fullscreenRequested){
       requestExperimentFullscreen();
       if (!state.cursorHidden){
         setCursorHidden(true);
