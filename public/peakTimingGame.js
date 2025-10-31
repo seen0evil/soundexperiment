@@ -739,7 +739,6 @@ function initPeakTimingGame(options = {}){
   const sketch = (p) => {
     // ---- Responsive sizing ----
     const ASPECT = 3.2;       // width / height (wide slider look). Try 16/9, 21/9, etc.
-    const MAX_W  = 1280;      // cap to avoid huge canvases
     const MIN_W  = 560;       // optional floor so it never gets too tiny
     let W = 0, H = 0;
 
@@ -748,16 +747,57 @@ function initPeakTimingGame(options = {}){
       return shell ? shell.clientWidth : window.innerWidth;
     }
 
+    function getAvailableHeight(){
+      const shell = document.querySelector('.canvas-shell');
+      if (shell){
+        const rect = shell.getBoundingClientRect();
+        const viewportHeight = window.innerHeight;
+        return Math.max(320, viewportHeight - rect.top);
+      }
+      const header = document.querySelector('header');
+      const headerHeight = header ? header.getBoundingClientRect().height : 0;
+      return Math.max(320, window.innerHeight - headerHeight);
+    }
+
     function calcCanvasSize() {
-      const avail = getShellWidth();                 // <— use shell width
-      const w = Math.max(MIN_W, Math.min(avail, MAX_W));
-      const h = Math.round(w / ASPECT);
+      const availWidth = getShellWidth();
+      const availHeight = getAvailableHeight();
+      const minWidth = Math.min(MIN_W, availWidth);
+      const minHeight = Math.round(minWidth / ASPECT);
+
+      let w = availWidth;
+      let h = Math.round(w / ASPECT);
+
+      if (h > availHeight){
+        h = availHeight;
+        w = Math.round(h * ASPECT);
+      }
+
+      if (w > availWidth){
+        w = availWidth;
+        h = Math.round(w / ASPECT);
+      }
+
+      w = Math.max(minWidth, Math.min(w, availWidth));
+      h = Math.max(Math.min(availHeight, Math.round(w / ASPECT)), minHeight);
+
+      if (h > availHeight){
+        h = availHeight;
+        w = Math.round(Math.min(availWidth, h * ASPECT));
+      }
+
+      w = Math.max(1, Math.round(w));
+      h = Math.max(1, Math.round(h));
+
       return { w, h };
     }
 
     function applyCanvasSize(p, cnvEl) {
       const { w, h } = calcCanvasSize();
-      if (p.width !== w || p.height !== h) p.resizeCanvas(w, h);
+      if (p.width !== w || p.height !== h){
+        p.resizeCanvas(w, h);
+      }
+      W = w; H = h;
       // lock CSS size to the intrinsic size (prevents blurry upscaling)
       if (cnvEl) {
         cnvEl.style.width = w + 'px';
@@ -766,11 +806,11 @@ function initPeakTimingGame(options = {}){
     }
 
     function observeHolderResize(p, cnvEl) {
-  const holder = document.getElementById('sketch-holder');
-  if (!holder) return;
-  const ro = new ResizeObserver(() => applyCanvasSize(p, cnvEl));
-  ro.observe(holder);
-}
+      const holder = document.getElementById('sketch-holder');
+      if (!holder) return;
+      const ro = new ResizeObserver(() => applyCanvasSize(p, cnvEl));
+      ro.observe(holder);
+    }
 
     p.setup = () => {
       const { w, h } = calcCanvasSize();
@@ -784,7 +824,7 @@ function initPeakTimingGame(options = {}){
       el.style.width = w + 'px';
       el.style.height = h + 'px';
 
-      observeHolderResize (p,el);
+      observeHolderResize(p, el);
 
       // safety: if initial layout was late
       setTimeout(() => applyCanvasSize(p, el), 0);
@@ -948,7 +988,8 @@ function initPeakTimingGame(options = {}){
     function targetTrackGeometry(){
       const Wc = p.width;
       const Hc = p.height;
-      const trackWidth = Math.round(Wc * 0.56);
+      const maxTrackWidth = 720;
+      const trackWidth = Math.round(Math.min(Wc * 0.56, maxTrackWidth));
       const trackHeight = Math.round(Math.min(40, Math.max(32, Hc * 0.1)));
       const bx = Math.round((Wc - trackWidth) / 2);
       const by = Math.round((Hc - trackHeight) / 2);
@@ -994,7 +1035,7 @@ function initPeakTimingGame(options = {}){
       if (pendingEventFrame){ lastFrameAfterEventTime = nowPerf; ev2frEl.textContent = Math.round(lastFrameAfterEventTime - lastEventTime) + ' ms'; pendingEventFrame = false; }
       if (pendingPollFrame){ lastFrameAfterPollTime = nowPerf; po2frEl.textContent = Math.round(lastFrameAfterPollTime - lastPollTime) + ' ms'; pendingPollFrame = false; }
 
-      p.background(7, 11, 22);
+      p.background(0);
       if (mode === 'ball'){ drawBallScene(); }
       else if (mode === 'bar'){ drawBarScene(); }
       else { drawTargetScene(); }
