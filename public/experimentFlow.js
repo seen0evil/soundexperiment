@@ -16,8 +16,8 @@
         title: 'How perfect is your timing? (5 min)',
         body: [
           'Before you begin the experiment, please ensure the following:',
-          'Please make sure that your sound is turned on, and pause or mute any background audio.',
-          'You are in a room with no distractions (no other music, people, etc).',
+          '(1) Your sound is turned on and you can hear the music that is playing.',
+          '(2) You are in a room with no distractions (no other music, people, etc).',
           'Please enter your Prolific ID.'
         ],
         advanceLabel: 'Proceed',
@@ -29,9 +29,11 @@
         id: 'before-practice',
         title: 'How perfect is your timing? (5 min)',
         body: [
-          'On each screen you will see a horizontal bar with a dot on its left side, and a yellow ring on its right side.',
+          'On each screen you will see a horizontal bar with a dot on its left side,',
+          'and a yellow ring on its right side.',
           'After a short delay, the dot will quickly move rightward toward the yellow ring.',
-          'Your job is to press the spacebar when the dot is *as close as possible* to the center of the ring.',
+          'Your job is to press the spacebar',
+          'when the dot is *as close as possible* to the center of the ring.',
           'The closer you get, the more points you will score!'
         ],
         advanceLabel: 'Press the spacebar to begin the practice trials.',
@@ -39,12 +41,15 @@
       },
       {
         id: 'before-real',
-        title: 'Ready for the main block?',
+        title: 'You will now begin the real experiment (2 min)',
         body: [
-          'The next block is the real experiment. Do your best to match the highlighted target.',
-          'Each successful match adds to your block total.'
+          'On each screen, press the spacebar when the dot is *as close as possible* to the ring’s center.',
+          'The closer you get, the more points will be added to your total score!',
+          'In order for the experiment to accurately measure your reflexes,',
+          'it is very important that you remain engaged all the way until the end,',
+          'and try to respond with perfect timing on every screen.'
         ],
-        advanceLabel: 'Start practice trials (press space)',
+        advanceLabel: 'Press the spacebar to begin',
         showBefore: 'experiment'
       }
     ],
