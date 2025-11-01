@@ -104,6 +104,7 @@
   const SURVEY_URL = 'https://docs.google.com/forms/d/e/1FAIpQLSfa3kSWdTK9Z5m3ROktDiLnK9fnArW8lB3AOnyLy8n1KQzwMw/viewform';
 
   const dom = {};
+  const FINAL_TRIAL_BUFFER_MS = 1500;
   const state = {
     controller: null,
     config: defaultConfig,
@@ -134,6 +135,7 @@
     },
     resultSubmitting: false,
     resultSubmitted: false,
+    blockCompletionTimer: null,
   };
 
   function $(id){ return document.getElementById(id); }
@@ -524,6 +526,10 @@
   }
 
   function completeBlock(){
+    if (state.blockCompletionTimer){
+      clearTimeout(state.blockCompletionTimer);
+      state.blockCompletionTimer = null;
+    }
     const block = state.currentBlock;
     if (!block) return;
     block.record.completedAt = new Date().toISOString();
@@ -579,7 +585,13 @@
       dom.hudTrialCount.dataset.state = (totalTrials > 0 && block.trialsCompleted >= totalTrials) ? 'ok' : 'pending';
     }
     if (totalTrials > 0 && block.trialsCompleted >= totalTrials){
-      completeBlock();
+      if (state.blockCompletionTimer){
+        clearTimeout(state.blockCompletionTimer);
+      }
+      state.blockCompletionTimer = setTimeout(() => {
+        state.blockCompletionTimer = null;
+        completeBlock();
+      }, FINAL_TRIAL_BUFFER_MS);
     }
     const trialForUpload = {
       ...(context.trial || {}),

@@ -998,8 +998,31 @@ function initPeakTimingGame(options = {}){
       const pad = Math.max(24, Math.min(32, maxPad, padBase));
       const innerLeft = bx + pad;
       const innerRight = bx + trackWidth - pad;
+      const trackThickness = Math.max(14, Math.min(Math.round(trackWidth * 0.08), Math.round(trackHeight * 0.8)));
+      const dotRadius = 10;
+      const ringRadius = 14;
+      const playerLeft = innerLeft + dotRadius;
+      const playerRight = innerRight - dotRadius;
+      const targetLeft = innerLeft + ringRadius;
+      const targetRight = innerRight - ringRadius;
       const cy = by + trackHeight / 2;
-      return { bx, by, bw: trackWidth, bh: trackHeight, pad, innerLeft, innerRight, cy };
+      return {
+        bx,
+        by,
+        bw: trackWidth,
+        bh: trackHeight,
+        pad,
+        innerLeft,
+        innerRight,
+        trackThickness,
+        dotRadius,
+        ringRadius,
+        playerLeft,
+        playerRight,
+        targetLeft,
+        targetRight,
+        cy,
+      };
     }
 
     function drawTargetScene(){
@@ -1054,12 +1077,12 @@ function initPeakTimingGame(options = {}){
             cy = H*0.5 - A*Math.cos(ripple.theta ?? renderTheta);
           } else {
             const geom = targetTrackGeometry();
-            cx = (geom.innerLeft + geom.innerRight) / 2;
+            cx = (geom.playerLeft + geom.playerRight) / 2;
             cy = geom.cy;
             if (ripple.mode === 'target' && typeof ripple.playerValue === 'number'){
-              cx = p.lerp(geom.innerLeft, geom.innerRight, ripple.playerValue);
+              cx = p.lerp(geom.playerLeft, geom.playerRight, ripple.playerValue);
             } else if (ripple.mode === 'target' && typeof ripple.target === 'number'){
-              cx = p.lerp(geom.innerLeft, geom.innerRight, ripple.target);
+              cx = p.lerp(geom.targetLeft, geom.targetRight, ripple.target);
             }
           }
           p.circle(cx, cy, r*2);
