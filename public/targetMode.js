@@ -391,14 +391,14 @@
         ? state.playerFrozenProgress
         : state.progress;
       const playerNorm = clamp(progressValue, 0, 1);
-      const playerX = p.lerp(geom.innerLeft, geom.innerRight, playerNorm);
-      const targetX = p.lerp(geom.innerLeft, geom.innerRight, clamp(state.targetPos, range.min, range.max));
+      const playerX = p.lerp(geom.playerLeft, geom.playerRight, playerNorm);
+      const targetX = p.lerp(geom.targetLeft, geom.targetRight, clamp(state.targetPos, range.min, range.max));
       const cy = geom.cy;
       const sliderLeft = geom.innerLeft;
       const sliderRight = geom.innerRight;
       const sliderCenterX = (sliderLeft + sliderRight) / 2;
       const trackWidth = sliderRight - sliderLeft;
-      const trackThickness = Math.max(14, Math.min(geom.bh - 10, Math.round(trackWidth * 0.08)));
+      const trackThickness = geom.trackThickness;
 
       if (showingIti){
         p.push();
@@ -436,27 +436,27 @@
       p.push();
       p.noStroke();
       p.fill(28);
-      p.rect(sliderLeft, trackTop, trackWidth, trackThickness, trackThickness / 2);
+      p.rect(sliderLeft, trackTop, trackWidth, trackThickness, 0);
       p.pop();
 
       p.push();
       p.noFill();
       p.stroke(128);
       p.strokeWeight(3);
-      p.rect(sliderLeft, trackTop, trackWidth, trackThickness, trackThickness / 2);
+      p.rect(sliderLeft, trackTop, trackWidth, trackThickness, 0);
       p.pop();
 
       p.push();
       p.noStroke();
       p.fill(235);
-      p.circle(playerX, cy, 20);
+      p.circle(playerX, cy, geom.dotRadius * 2);
       p.pop();
 
       p.push();
       p.noFill();
       p.stroke(255,230,0);
       p.strokeWeight(3);
-      p.circle(targetX, cy, 28);
+      p.circle(targetX, cy, geom.ringRadius * 2);
       p.pop();
 
       if (state.feedback && state.feedback.playerValue != null){
