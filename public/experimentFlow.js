@@ -5,10 +5,11 @@
     instructions: [
       {
         id: 'welcome',
-        title: 'Welcome to the timing study',
+        title: 'How perfect is your timing? (5 min)',
         body: [
+          'Before you begin the experiment, please ensure the following:',
           'Please make sure that your sound is turned on, and pause or mute any background audio.',
-          'Please make remain in full-screen mode throughout the experiment.',
+          'You are in a room with no distractions (no other music, people, etc).',
           'Please enter your Prolific ID.'
         ],
         advanceLabel: 'Begin practice',
@@ -21,7 +22,8 @@
         body: [
           'On each screen you will see a horizontal bar with a dot on its left side, and a yellow ring on its right side.',
           'After a short delay, the dot will quickly move rightward toward the yellow ring.',
-          'Your job is to press the spacebar when the dot is *as close as possible* to the center of the ring.  The closer you get, the more points you will score!',
+          'Your job is to press the spacebar when the dot is *as close as possible* to the center of the ring.',
+          'The closer you get, the more points you will score!'
         ],
         advanceLabel: 'Press the spacebar to begin the practice trials.',
         showBefore: 'practice'

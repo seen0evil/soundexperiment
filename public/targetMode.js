@@ -422,7 +422,7 @@
         p.textSize(32);
         p.fill(255, 186, 186);
         p.noStroke();
-        p.text('Timeout! Make sure to press spacebar in time!', p.width / 2, p.height / 2);
+        p.text('Please make sure to press spacebar in time!', p.width / 2, p.height / 2);
         p.pop();
         return;
       }
