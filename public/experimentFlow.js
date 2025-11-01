@@ -7,7 +7,6 @@
         id: 'start-experiment',
         title: 'Ready to begin?',
         body: [
-          'When you are ready to start, click the button below. You will only need to do this once to begin the experiment.'
         ],
         advanceLabel: 'Start the experiment',
         advanceMode: 'button',
@@ -21,7 +20,7 @@
           'You are in a room with no distractions (no other music, people, etc).',
           'Please enter your Prolific ID.'
         ],
-        advanceLabel: 'Begin practice',
+        advanceLabel: 'Proceed',
         advanceMode: 'button',
         collectParticipantId: true,
         playBackgroundMusic: true,
