@@ -4,6 +4,15 @@
     configVersion: '1.0.0',
     instructions: [
       {
+        id: 'start-experiment',
+        title: 'Ready to begin?',
+        body: [
+          'When you are ready to start, click the button below. You will only need to do this once to begin the experiment.'
+        ],
+        advanceLabel: 'Start the experiment',
+        advanceMode: 'button',
+      },
+      {
         id: 'welcome',
         title: 'How perfect is your timing? (5 min)',
         body: [
@@ -15,6 +24,7 @@
         advanceLabel: 'Begin practice',
         advanceMode: 'button',
         collectParticipantId: true,
+        playBackgroundMusic: true,
       },
       {
         id: 'before-practice',
@@ -114,6 +124,8 @@
     currentInstruction: null,
     currentInstructionMeta: null,
     currentInstructionAdvanceMode: 'space',
+    instructionMusic: null,
+    playingInstructionMusicFor: null,
     advanceClickHandler: null,
     lastAdvanceTrigger: null,
     awaitingSpaceRelease: false,
@@ -150,6 +162,41 @@
     } else {
       document.body.classList.remove('cursor-hidden');
     }
+  }
+
+  function initialiseInstructionMusic(){
+    if (state.instructionMusic) return;
+    const audio = new Audio('audio/emotional-soft-piano-inspiring-427637.mp3');
+    audio.loop = true;
+    audio.preload = 'auto';
+    state.instructionMusic = audio;
+  }
+
+  function stopInstructionMusic(){
+    const audio = state.instructionMusic;
+    if (!audio) return;
+    audio.pause();
+    try {
+      audio.currentTime = 0;
+    } catch (err) {
+      // Ignore failures when resetting playback position
+    }
+    state.playingInstructionMusicFor = null;
+  }
+
+  function playInstructionMusic(){
+    const audio = state.instructionMusic;
+    if (!audio) return;
+    try {
+      audio.currentTime = 0;
+    } catch (err) {
+      // Ignore failures when resetting playback position
+    }
+    const playPromise = audio.play();
+    if (playPromise && typeof playPromise.catch === 'function'){
+      playPromise.catch(() => {});
+    }
+    state.playingInstructionMusicFor = state.currentInstruction?.id ?? null;
   }
 
   function requestExperimentFullscreen(){
@@ -349,6 +396,11 @@
       dom.participantForm.setAttribute('hidden', '');
     }
     showOverlay();
+    if (instruction.playBackgroundMusic){
+      playInstructionMusic();
+    } else if (state.playingInstructionMusicFor){
+      stopInstructionMusic();
+    }
   }
 
   function finishInstruction(){
@@ -370,6 +422,9 @@
       }
       state.run.participantId = value;
       if (meta){ meta.data.participantId = value; }
+    }
+    if (current.playBackgroundMusic){
+      stopInstructionMusic();
     }
     if (meta){
       meta.completedAt = new Date().toISOString();
@@ -777,6 +832,7 @@
     setResultStatus('idle', 'Results pending');
 
     setCursorHidden(false);
+    initialiseInstructionMusic();
 
     const controller = window.initPeakTimingGame({
       initialMode: 'target',
