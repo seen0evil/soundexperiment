@@ -404,14 +404,14 @@
         p.push();
         p.stroke(180);
         p.strokeWeight(4);
-        p.line(sliderCenterX - 24, cy, sliderCenterX + 24, cy);
-        p.line(sliderCenterX, cy - 24, sliderCenterX, cy + 24);
+        //p.line(sliderCenterX - 24, cy, sliderCenterX + 24, cy);
+        //p.line(sliderCenterX, cy - 24, sliderCenterX, cy + 24);
         p.pop();
 
         p.push();
         p.noStroke();
         p.fill(235);
-        p.circle(sliderCenterX, cy, 6);
+        //p.circle(sliderCenterX, cy, 6);
         p.pop();
         return;
       }

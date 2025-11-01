@@ -429,7 +429,7 @@
       meta.completedAt = new Date().toISOString();
       recordInstructionEvent(meta);
     }
-    if (!state.fullscreenRequested){
+    if (current.collectParticipantId && !state.fullscreenRequested){
       requestExperimentFullscreen();
       if (!state.cursorHidden){
         setCursorHidden(true);
