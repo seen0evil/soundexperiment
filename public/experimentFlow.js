@@ -747,7 +747,6 @@
         <dl>
           <dt>Prolific ID</dt><dd>${state.run.participantId ? state.run.participantId : '—'}</dd>
           <dt>Overall score</dt><dd>${state.run.overallScore.toFixed(1)}</dd>
-          <dt>Blocks completed</dt><dd>${state.run.blocks.length}</dd>
         </dl>
       </div>
     `;
