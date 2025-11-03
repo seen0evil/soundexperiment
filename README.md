@@ -25,6 +25,22 @@ SQLite database under `data/experiments.sqlite`.
   normalised playback `condition`, serialized score/timing arrays, participant
   metadata, and a generated confirmation code returned to the browser.
 
+## Exporting data
+
+Run the export script to generate a CSV report of the structured experiment
+results stored in the SQLite database:
+
+```bash
+npm run export:results
+```
+
+The script writes `experiment_results_export.csv` in the repository root. It
+normalises the stored score and timing arrays (supporting both JSON and
+legacy comma-separated formats), computes basic summary statistics, and adds a
+compact payload excerpt so the resulting CSV is easier to inspect. Pass the
+`--include-payload` flag to include the full JSON payload in the export if you
+still need it.
+
 ## Front-end behaviour
 
 The client automatically establishes a session, queues trial results while
