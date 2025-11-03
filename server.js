@@ -207,15 +207,62 @@ app.post('/api/experiment-results', (req, res) => {
       scores.push(String(scoreValue));
 
       const analytics = trial?.analytics || null;
-      const travelSeconds = Number(analytics?.configSnapshot?.PLAYER_TRAVEL_SECONDS);
       const feedback = analytics?.feedback || {};
-      const playerValue = feedback.playerValue;
-      const targetValue = feedback.targetValue;
-      let timingValue = 0;
-      if (Number.isFinite(playerValue) && Number.isFinite(targetValue) && Number.isFinite(travelSeconds)) {
+      const configSnapshot = analytics?.configSnapshot || {};
+
+      const travelCandidates = [
+        configSnapshot.PLAYER_TRAVEL_SECONDS,
+        configSnapshot.playerTravelSeconds,
+        trial?.settings?.playerTravelSeconds,
+        trial?.settings?.playerSpeed,
+      ];
+      let travelSeconds = null;
+      for (const candidate of travelCandidates) {
+        const numeric = Number(candidate);
+        if (Number.isFinite(numeric) && numeric > 0) {
+          travelSeconds = numeric;
+          break;
+        }
+      }
+
+      const playerCandidates = [
+        feedback.playerValue,
+        analytics?.freezeEvent?.playerValue,
+        analytics?.freezeEvent?.playerValueAtPress,
+        trial?.playerValue,
+      ];
+      let playerValue = null;
+      for (const candidate of playerCandidates) {
+        const numeric = Number(candidate);
+        if (Number.isFinite(numeric)) {
+          playerValue = numeric;
+          break;
+        }
+      }
+
+      const targetCandidates = [
+        feedback.targetValue,
+        trial?.target,
+      ];
+      let targetValue = null;
+      for (const candidate of targetCandidates) {
+        const numeric = Number(candidate);
+        if (Number.isFinite(numeric)) {
+          targetValue = numeric;
+          break;
+        }
+      }
+
+      let timingValue = null;
+      if (
+        Number.isFinite(playerValue)
+        && Number.isFinite(targetValue)
+        && Number.isFinite(travelSeconds)
+      ) {
         timingValue = Math.round((playerValue - targetValue) * travelSeconds * 1000);
       }
-      timings.push(String(timingValue));
+
+      timings.push(String(Number.isFinite(timingValue) ? timingValue : 0));
     }
   }
 
