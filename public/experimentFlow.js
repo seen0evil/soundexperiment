@@ -70,13 +70,13 @@
           targetMax: 0.8,
           audioMode: 'immediate',
           audioDelayMs: 0,
-          audioDurationMs: 120,
+          audioDurationMs: 100,
         }
       },
       {
         id: 'experiment',
         label: 'Main experiment',
-        trials: 10,
+        trials: 30,
         upload: true,
         parameters: {
           mode: 'target',
@@ -88,17 +88,17 @@
           targetMin: 0.5,
           targetMax: 0.8,
           audioMode: 'immediate',
-          audioDurationMs: 120,
+          audioDurationMs: 100,
         },
         segments: [
           {
-            trials: 5,
+            trials: 10,
             parameters: {
               audioDelayMs: 0,
             }
           },
           {
-            trials: 5,
+            trials: 20,
             parameters: {
               audioDelayMs: 60,
             }
