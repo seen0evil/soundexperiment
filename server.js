@@ -48,6 +48,8 @@ CREATE TABLE IF NOT EXISTS experiment_results (
   experiment_id TEXT,
   config_version TEXT,
   payload TEXT NOT NULL,
+  score TEXT,
+  timing TEXT,
   confirmation_code TEXT,
   created_at TEXT NOT NULL,
   FOREIGN KEY(session_id) REFERENCES sessions(id) ON DELETE CASCADE
@@ -67,6 +69,8 @@ function ensureColumn(table, column, definition){
 
 ensureColumn('trials', 'experiment_id', 'experiment_id TEXT');
 ensureColumn('trials', 'participant_id', 'participant_id TEXT');
+ensureColumn('experiment_results', 'score', 'score TEXT');
+ensureColumn('experiment_results', 'timing', 'timing TEXT');
 
 const upsertSession = db.prepare(`
   INSERT INTO sessions (id, created_at, last_seen_at, user_agent, metadata)
@@ -86,8 +90,8 @@ const insertTrial = db.prepare(`
 `);
 
 const insertExperimentResult = db.prepare(`
-  INSERT INTO experiment_results (session_id, participant_id, experiment_id, config_version, payload, confirmation_code, created_at)
-  VALUES (@session_id, @participant_id, @experiment_id, @config_version, @payload, @confirmation_code, @created_at)
+  INSERT INTO experiment_results (session_id, participant_id, experiment_id, config_version, payload, confirmation_code, score, timing, created_at)
+  VALUES (@session_id, @participant_id, @experiment_id, @config_version, @payload, @confirmation_code, @score, @timing, @created_at)
 `);
 
 app.use(express.json({ limit: '1mb' }));
@@ -191,6 +195,30 @@ app.post('/api/experiment-results', (req, res) => {
   const configVersion = typeof result.configVersion === 'string' ? result.configVersion.slice(0, 120) : null;
   const confirmationCode = randomUUID().split('-')[0];
 
+  const blocks = Array.isArray(result.blocks) ? result.blocks : [];
+  const scores = [];
+  const timings = [];
+  for (const block of blocks) {
+    if (!block || block.upload === false) continue;
+    const trials = Array.isArray(block.trials) ? block.trials : [];
+    for (const trial of trials) {
+      const numericScore = Number(trial?.score);
+      const scoreValue = Number.isFinite(numericScore) ? numericScore : 0;
+      scores.push(String(scoreValue));
+
+      const analytics = trial?.analytics || null;
+      const travelSeconds = Number(analytics?.configSnapshot?.PLAYER_TRAVEL_SECONDS);
+      const feedback = analytics?.feedback || {};
+      const playerValue = feedback.playerValue;
+      const targetValue = feedback.targetValue;
+      let timingValue = 0;
+      if (Number.isFinite(playerValue) && Number.isFinite(targetValue) && Number.isFinite(travelSeconds)) {
+        timingValue = Math.round((playerValue - targetValue) * travelSeconds * 1000);
+      }
+      timings.push(String(timingValue));
+    }
+  }
+
   const info = insertExperimentResult.run({
     session_id: sessionId,
     participant_id: participantId,
@@ -198,6 +226,8 @@ app.post('/api/experiment-results', (req, res) => {
     config_version: configVersion,
     payload,
     confirmation_code: confirmationCode,
+    score: scores.join(','),
+    timing: timings.join(','),
     created_at: now,
   });
 
