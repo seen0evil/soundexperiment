@@ -21,7 +21,8 @@ SQLite database under `data/experiments.sqlite`.
 - **trials** – One row per attempt. Stores the raw payload emitted by the
   client along with summary fields (`score`, `judgement`, `trial_index`).
 - **experiment_results** – One row per participant for structured experiment
-  runs. Each row captures the aggregated block and trial data, participant
+  runs. Each row captures the aggregated block and trial data, the
+  normalised playback `condition`, serialized score/timing arrays, participant
   metadata, and a generated confirmation code returned to the browser.
 
 ## Front-end behaviour
