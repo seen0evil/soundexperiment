@@ -57,7 +57,7 @@
       {
         id: 'practice',
         label: 'Practice block',
-        trials: 5,
+        trials: 10,
         upload: false,
         parameters: {
           mode: 'target',
