@@ -36,7 +36,7 @@
           'when the dot is *as close as possible* to the center of the ring.',
           'The closer you get, the more points you will score!'
         ],
-        advanceLabel: 'Press the spacebar to begin the practice trials.',
+        advanceLabel: 'Press the spacebar to begin the practice.',
         showBefore: 'practice'
       },
       {
@@ -110,7 +110,7 @@
       title: 'All done!',
       body: [
         'Thank you for completing the study.',
-        'Your responses have been recorded. You may now proceed to the survey form.'
+        'Your responses have been recorded. You may now start the debriefing survey.'
       ]
     }
   };
