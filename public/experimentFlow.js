@@ -119,6 +119,12 @@
 
   const dom = {};
   const FINAL_TRIAL_BUFFER_MS = 1500;
+  const CONDITION_PARAM_MAP = {
+    a: 'immediate',
+    b: 'delay',
+    immediate: 'immediate',
+    delay: 'delay',
+  };
   const state = {
     controller: null,
     config: defaultConfig,
@@ -139,6 +145,7 @@
     currentBlock: null,
     fullscreenRequested: false,
     cursorHidden: false,
+    condition: 'immediate',
     run: {
       experimentId: null,
       configVersion: null,
@@ -148,6 +155,7 @@
       overallScore: 0,
       instructions: [],
       blocks: [],
+      condition: 'immediate',
     },
     resultSubmitting: false,
     resultSubmitted: false,
@@ -556,6 +564,7 @@
       startedAt: now,
       completedAt: null,
       totalScore: 0,
+      condition: state.run.condition,
     };
     state.currentBlock = {
       config: blockConfig,
@@ -657,6 +666,7 @@
       experimentId: state.run.experimentId ?? null,
       participantId: state.run.participantId ?? null,
       blockId: block.config?.id ?? null,
+      condition: state.run.condition ?? null,
     };
     return { upload: block.record.upload, trial: trialForUpload };
   }
@@ -691,6 +701,7 @@
       instructions: state.run.instructions,
       blocks: state.run.blocks,
       userAgent: navigator.userAgent,
+      condition: state.run.condition,
     };
     try {
       const res = await fetch('/api/experiment-results', {
@@ -810,6 +821,39 @@
     state.pendingInputEnable = false;
   }
 
+  function deepCloneConfig(config){
+    if (!config) return config;
+    if (typeof structuredClone === 'function'){
+      try {
+        return structuredClone(config);
+      } catch (err) {
+        // Fallback to JSON method below
+      }
+    }
+    return JSON.parse(JSON.stringify(config));
+  }
+
+  function deriveCondition(){
+    const params = new URLSearchParams(window.location.search || '');
+    const raw = (params.get('condition') || '').toLowerCase();
+    return CONDITION_PARAM_MAP[raw] || 'immediate';
+  }
+
+  function applyConditionToConfig(config, condition){
+    if (!config || typeof config !== 'object' || !Array.isArray(config.blocks)){
+      return config;
+    }
+    if (condition !== 'delay'){
+      return config;
+    }
+    const targetBlock = config.blocks.find((block) => block && block.id === 'experiment');
+    if (!targetBlock || !targetBlock.parameters){
+      return config;
+    }
+    targetBlock.parameters = { ...targetBlock.parameters, audioMode: 'delay' };
+    return config;
+  }
+
   function initialise(){
     dom.overlay = $('experimentOverlay');
     dom.overlayTitle = $('overlayTitle');
@@ -825,7 +869,12 @@
     dom.hudTrialTotal = $('hudTrialTotal');
     dom.hudOverallScore = $('hudOverallScore');
 
-    state.config = window.EXPERIMENT_CONFIG || defaultConfig;
+    const baseConfig = window.EXPERIMENT_CONFIG || defaultConfig;
+    const condition = deriveCondition();
+    const clonedConfig = deepCloneConfig(baseConfig) || defaultConfig;
+    state.config = applyConditionToConfig(clonedConfig, condition) || clonedConfig;
+    state.condition = condition;
+    state.run.condition = condition;
     state.run.experimentId = state.config.experimentId || defaultConfig.experimentId;
     state.run.configVersion = state.config.configVersion || defaultConfig.configVersion;
 
@@ -842,6 +891,7 @@
       lockControls: true,
       autoUpload: false,
       onTrialComplete: handleTrialComplete,
+      condition,
     });
     state.controller = controller;
     controller.setInputEnabled(false);

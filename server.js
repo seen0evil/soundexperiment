@@ -23,7 +23,8 @@ CREATE TABLE IF NOT EXISTS sessions (
   created_at TEXT NOT NULL,
   last_seen_at TEXT NOT NULL,
   user_agent TEXT,
-  metadata TEXT
+  metadata TEXT,
+  condition TEXT
 );
 
 CREATE TABLE IF NOT EXISTS trials (
@@ -71,14 +72,16 @@ ensureColumn('trials', 'experiment_id', 'experiment_id TEXT');
 ensureColumn('trials', 'participant_id', 'participant_id TEXT');
 ensureColumn('experiment_results', 'score', 'score TEXT');
 ensureColumn('experiment_results', 'timing', 'timing TEXT');
+ensureColumn('sessions', 'condition', 'condition TEXT');
 
 const upsertSession = db.prepare(`
-  INSERT INTO sessions (id, created_at, last_seen_at, user_agent, metadata)
-  VALUES (@id, @created_at, @last_seen_at, @user_agent, @metadata)
+  INSERT INTO sessions (id, created_at, last_seen_at, user_agent, metadata, condition)
+  VALUES (@id, @created_at, @last_seen_at, @user_agent, @metadata, @condition)
   ON CONFLICT(id) DO UPDATE SET
     last_seen_at = excluded.last_seen_at,
     user_agent = COALESCE(excluded.user_agent, sessions.user_agent),
-    metadata = COALESCE(excluded.metadata, sessions.metadata)
+    metadata = COALESCE(excluded.metadata, sessions.metadata),
+    condition = COALESCE(excluded.condition, sessions.condition)
 `);
 
 const updateSessionSeen = db.prepare('UPDATE sessions SET last_seen_at = ? WHERE id = ?');
@@ -98,7 +101,7 @@ app.use(express.json({ limit: '1mb' }));
 
 app.post('/api/session', (req, res) => {
   const now = new Date().toISOString();
-  const { sessionId, userAgent, metadata } = req.body || {};
+  const { sessionId, userAgent, metadata, condition } = req.body || {};
   const id = (typeof sessionId === 'string' && sessionId.length > 10) ? sessionId : randomUUID();
   const cleanAgent = typeof userAgent === 'string' ? userAgent.slice(0, 512) : null;
   let metadataJson = null;
@@ -110,12 +113,24 @@ app.post('/api/session', (req, res) => {
     }
   }
 
+  const conditionMap = new Map([
+    ['immediate', 'immediate'],
+    ['delay', 'delay'],
+    ['a', 'immediate'],
+    ['b', 'delay'],
+  ]);
+  const rawCondition = typeof condition === 'string' ? condition.trim().toLowerCase() : null;
+  const normalizedCondition = rawCondition && conditionMap.has(rawCondition)
+    ? conditionMap.get(rawCondition)
+    : null;
+
   upsertSession.run({
     id,
     created_at: now,
     last_seen_at: now,
     user_agent: cleanAgent,
     metadata: metadataJson,
+    condition: normalizedCondition,
   });
 
   res.json({ sessionId: id });

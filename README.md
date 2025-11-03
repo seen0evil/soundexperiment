@@ -17,7 +17,7 @@ SQLite database under `data/experiments.sqlite`.
 ## Data model
 
 - **sessions** – Created when a participant opens the page. Tracks the browser
-  metadata and last activity time.
+  metadata, selected condition (`immediate`/`delay`), and last activity time.
 - **trials** – One row per attempt. Stores the raw payload emitted by the
   client along with summary fields (`score`, `judgement`, `trial_index`).
 - **experiment_results** – One row per participant for structured experiment
@@ -38,6 +38,12 @@ configuration-driven, structured flow is available at
 `public/experiment.html`. It presents a sequence of instruction screens, runs a
 practice block followed by a recorded block, and submits a single aggregated
 payload to `POST /api/experiment-results` once all blocks have finished.
+
+Append a `condition` query string to select the audio timing variant without
+creating a separate HTML file:
+
+- `public/experiment.html?condition=a` – Immediate audio feedback (default)
+- `public/experiment.html?condition=b` – Delayed audio feedback
 
 You can override the default configuration by defining a `window.EXPERIMENT_CONFIG`
 object before `experimentFlow.js` executes. The object accepts:

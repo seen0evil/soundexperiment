@@ -4,7 +4,18 @@ function initPeakTimingGame(options = {}){
     autoUpload: options.autoUpload !== false,
     initialMode: options.initialMode || 'ball',
     lockControls: options.lockControls ?? false,
+    condition: typeof options.condition === 'string' ? options.condition : null,
   };
+
+  const CONDITION_MAP = new Map([
+    ['immediate', 'immediate'],
+    ['delay', 'delay'],
+    ['a', 'immediate'],
+    ['b', 'delay'],
+  ]);
+  const sessionCondition = (typeof opts.condition === 'string')
+    ? (CONDITION_MAP.get(opts.condition.toLowerCase()) || null)
+    : null;
 
   // ------- UI state & helpers -------
   const ui = {
@@ -362,11 +373,15 @@ function initPeakTimingGame(options = {}){
     let tz = null;
     try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone; }
     catch (err) { tz = null; }
-    return {
+    const meta = {
       timezone: tz,
       language: navigator.language,
       platform: navigator.platform,
     };
+    if (sessionCondition){
+      meta.condition = sessionCondition;
+    }
+    return meta;
   }
 
   function notifySessionReady(){
@@ -388,6 +403,7 @@ function initPeakTimingGame(options = {}){
           sessionId,
           userAgent: navigator.userAgent,
           metadata: clientMetadata(),
+          condition: sessionCondition,
         }),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -518,6 +534,9 @@ function initPeakTimingGame(options = {}){
       timings,
       clientTimestamp: new Date().toISOString(),
     };
+    if (sessionCondition){
+      trialPayload.condition = sessionCondition;
+    }
     if (typeof result.reward === 'number'){ trialPayload.reward = result.reward; }
     if (result.analytics){ trialPayload.analytics = result.analytics; }
     let payloadForUpload = trialPayload;
@@ -693,6 +712,7 @@ function initPeakTimingGame(options = {}){
     getScores: () => [...scores],
     getSessionId: () => sessionId,
     isSessionReady: () => sessionReady,
+    getCondition: () => sessionCondition,
     onSessionReady(listener){
       if (typeof listener !== 'function') return () => {};
       sessionListeners.add(listener);
