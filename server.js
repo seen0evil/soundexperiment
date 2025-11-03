@@ -9,6 +9,19 @@ const PORT = process.env.PORT || 3000;
 const DATA_DIR = path.join(__dirname, 'data');
 const DB_PATH = path.join(DATA_DIR, 'experiments.sqlite');
 
+const CONDITION_MAP = new Map([
+  ['immediate', 'immediate'],
+  ['delay', 'delay'],
+  ['a', 'immediate'],
+  ['b', 'delay'],
+]);
+
+function normalizeCondition(value){
+  if (typeof value !== 'string') return null;
+  const key = value.trim().toLowerCase();
+  return CONDITION_MAP.get(key) || null;
+}
+
 if (!fs.existsSync(DATA_DIR)) {
   fs.mkdirSync(DATA_DIR, { recursive: true });
 }
@@ -51,6 +64,7 @@ CREATE TABLE IF NOT EXISTS experiment_results (
   payload TEXT NOT NULL,
   score TEXT,
   timing TEXT,
+  condition TEXT,
   confirmation_code TEXT,
   created_at TEXT NOT NULL,
   FOREIGN KEY(session_id) REFERENCES sessions(id) ON DELETE CASCADE
@@ -72,6 +86,7 @@ ensureColumn('trials', 'experiment_id', 'experiment_id TEXT');
 ensureColumn('trials', 'participant_id', 'participant_id TEXT');
 ensureColumn('experiment_results', 'score', 'score TEXT');
 ensureColumn('experiment_results', 'timing', 'timing TEXT');
+ensureColumn('experiment_results', 'condition', 'condition TEXT');
 ensureColumn('sessions', 'condition', 'condition TEXT');
 
 const upsertSession = db.prepare(`
@@ -85,7 +100,7 @@ const upsertSession = db.prepare(`
 `);
 
 const updateSessionSeen = db.prepare('UPDATE sessions SET last_seen_at = ? WHERE id = ?');
-const findSession = db.prepare('SELECT id FROM sessions WHERE id = ?');
+const findSession = db.prepare('SELECT id, condition FROM sessions WHERE id = ?');
 
 const insertTrial = db.prepare(`
   INSERT INTO trials (session_id, trial_index, score, judgement, payload, created_at, experiment_id, participant_id)
@@ -93,8 +108,8 @@ const insertTrial = db.prepare(`
 `);
 
 const insertExperimentResult = db.prepare(`
-  INSERT INTO experiment_results (session_id, participant_id, experiment_id, config_version, payload, confirmation_code, score, timing, created_at)
-  VALUES (@session_id, @participant_id, @experiment_id, @config_version, @payload, @confirmation_code, @score, @timing, @created_at)
+  INSERT INTO experiment_results (session_id, participant_id, experiment_id, config_version, payload, confirmation_code, score, timing, condition, created_at)
+  VALUES (@session_id, @participant_id, @experiment_id, @config_version, @payload, @confirmation_code, @score, @timing, @condition, @created_at)
 `);
 
 app.use(express.json({ limit: '1mb' }));
@@ -113,16 +128,7 @@ app.post('/api/session', (req, res) => {
     }
   }
 
-  const conditionMap = new Map([
-    ['immediate', 'immediate'],
-    ['delay', 'delay'],
-    ['a', 'immediate'],
-    ['b', 'delay'],
-  ]);
-  const rawCondition = typeof condition === 'string' ? condition.trim().toLowerCase() : null;
-  const normalizedCondition = rawCondition && conditionMap.has(rawCondition)
-    ? conditionMap.get(rawCondition)
-    : null;
+  const normalizedCondition = normalizeCondition(condition);
 
   upsertSession.run({
     id,
@@ -192,9 +198,16 @@ app.post('/api/experiment-results', (req, res) => {
     return res.status(404).json({ error: 'Session not found' });
   }
 
+  const sessionCondition = normalizeCondition(existing?.condition);
+  const resultCondition = normalizeCondition(result?.condition);
+  const storedCondition = resultCondition ?? sessionCondition ?? null;
+
   let payload;
   try {
-    payload = JSON.stringify(result);
+    payload = JSON.stringify({
+      ...result,
+      condition: storedCondition,
+    });
   } catch (err) {
     return res.status(400).json({ error: 'Invalid result payload' });
   }
@@ -219,7 +232,7 @@ app.post('/api/experiment-results', (req, res) => {
     for (const trial of trials) {
       const numericScore = Number(trial?.score);
       const scoreValue = Number.isFinite(numericScore) ? numericScore : 0;
-      scores.push(String(scoreValue));
+      scores.push(scoreValue);
 
       const analytics = trial?.analytics || null;
       const feedback = analytics?.feedback || {};
@@ -277,7 +290,7 @@ app.post('/api/experiment-results', (req, res) => {
         timingValue = Math.round((playerValue - targetValue) * travelSeconds * 1000);
       }
 
-      timings.push(String(Number.isFinite(timingValue) ? timingValue : 0));
+      timings.push(Number.isFinite(timingValue) ? timingValue : 0);
     }
   }
 
@@ -288,8 +301,9 @@ app.post('/api/experiment-results', (req, res) => {
     config_version: configVersion,
     payload,
     confirmation_code: confirmationCode,
-    score: scores.join(','),
-    timing: timings.join(','),
+    score: JSON.stringify(scores),
+    timing: JSON.stringify(timings),
+    condition: storedCondition,
     created_at: now,
   });
 
