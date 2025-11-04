@@ -29,11 +29,9 @@
         id: 'before-practice',
         title: 'How perfect is your timing? (5 min)',
         body: [
-          'On each screen you will see a horizontal bar with a dot on its left side,',
-          'and a yellow ring on its right side.',
+          'On each screen you will see a horizontal bar with a dot on its left side and a yellow ring on its right side.',
           'After a short delay, the dot will quickly move rightward toward the yellow ring.',
-          'Your job is to press the spacebar',
-          'when the dot is *as close as possible* to the center of the ring.',
+          'Your job is to press the spacebar when the dot is *as close as possible* to the center of the ring.',
           'The closer you get, the more points you will score!'
         ],
         advanceLabel: 'Press the spacebar to begin the practice.',
@@ -46,8 +44,7 @@
           'On each screen, press the spacebar when the dot is *as close as possible* to the ring’s center.',
           'The closer you get, the more points will be added to your total score!',
           'In order for the experiment to accurately measure your reflexes,',
-          'it is very important that you remain engaged all the way until the end,',
-          'and try to respond with perfect timing on every screen.'
+          'it is very important that you remain engaged all the way until the end,and try to respond with perfect timing on every screen.',
         ],
         advanceLabel: 'Press the spacebar to begin',
         showBefore: 'experiment'
