@@ -1,7 +1,7 @@
 (function(){
   const defaultConfig = {
     experimentId: 'target-slider-study',
-    configVersion: '1.0.0',
+    configVersion: '2.0.0',
     instructions: [
       {
         id: 'start-experiment',
