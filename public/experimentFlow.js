@@ -97,7 +97,7 @@
           {
             trials: 20,
             parameters: {
-              audioDelayMs: 60,
+              audioDelayMs: 120,
             }
           }
         ]
