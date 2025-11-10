@@ -1,7 +1,7 @@
 (function(){
   const defaultConfig = {
     experimentId: 'target-slider-study',
-    configVersion: '2.0.0',
+    configVersion: '2.5.0',
     instructions: [
       {
         id: 'start-experiment',
@@ -44,7 +44,7 @@
           'On each screen, press the spacebar when the dot is *as close as possible* to the ring’s center.',
           'The closer you get, the more points will be added to your total score!',
           'In order for the experiment to accurately measure your reflexes,',
-          'it is very important that you remain engaged all the way until the end,and try to respond with perfect timing on every screen.',
+          'it is very important that you remain engaged all the way until the end, and try to respond with perfect timing on every screen.',
         ],
         advanceLabel: 'Press the spacebar to begin',
         showBefore: 'experiment'
