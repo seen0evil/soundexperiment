@@ -7,6 +7,7 @@
   const TIMEOUT_LINGER_MS = 2200;
   const MIN_TARGET_POS = 0.6;
   const MAX_TARGET_POS = 0.9;
+  const SCORE_DECAY_DISTANCE = 0.4; // 40% of the slider width in each direction
 
   function createTargetMode({ ui, clamp, pushScore, refreshLabels }){
     const state = {
@@ -237,7 +238,10 @@
       const cfg = targetConfigSnapshot();
       const trialTarget = state.targetPos;
       const distance = Math.abs(playerValue - trialTarget);
-      const proximity = clamp(1 - distance, 0, 1);
+      const normalizedDistance = SCORE_DECAY_DISTANCE > 0
+        ? distance / SCORE_DECAY_DISTANCE
+        : distance;
+      const proximity = clamp(1 - normalizedDistance, 0, 1);
       const gamma = Number.isFinite(cfg.REWARD_GAMMA) ? cfg.REWARD_GAMMA : 1;
       const rawPointsMax = Number.isFinite(cfg.POINTS_MAX_PER_TRIAL) ? cfg.POINTS_MAX_PER_TRIAL : 0;
       const pointsMax = Math.min(100, rawPointsMax);
