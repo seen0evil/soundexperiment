@@ -7,6 +7,7 @@
   const TIMEOUT_LINGER_MS = 2200;
   const MIN_TARGET_POS = 0.6;
   const MAX_TARGET_POS = 0.9;
+  const REWARD_DECAY_SPAN_FRACTION = 0.4; // Score falls from 100 to 0 across 40% of the slider span
 
   function createTargetMode({ ui, clamp, pushScore, refreshLabels }){
     const state = {
@@ -238,10 +239,14 @@
       const trialTarget = state.targetPos;
       const distance = Math.abs(playerValue - trialTarget);
       const proximity = clamp(1 - distance, 0, 1);
+      const sliderSpan = Math.max(0, state.range.max - state.range.min);
+      const decayDistance = Math.max((sliderSpan > 0 ? sliderSpan : 1) * REWARD_DECAY_SPAN_FRACTION, Number.EPSILON);
+      const normalizedDistance = clamp(distance / decayDistance, 0, 1);
+      const rewardProximity = clamp(1 - normalizedDistance, 0, 1);
       const gamma = Number.isFinite(cfg.REWARD_GAMMA) ? cfg.REWARD_GAMMA : 1;
       const rawPointsMax = Number.isFinite(cfg.POINTS_MAX_PER_TRIAL) ? cfg.POINTS_MAX_PER_TRIAL : 0;
-      const pointsMax = Math.min(100, rawPointsMax);
-      const proximityGamma = Math.pow(proximity, gamma);
+      const pointsMax = clamp(rawPointsMax, 0, 100);
+      const proximityGamma = Math.pow(rewardProximity, gamma);
       const reward = Math.round(proximityGamma * pointsMax);
       const colorRGB = targetColorForProximity(proximity);
 
@@ -256,6 +261,7 @@
         colorRGB,
         distance,
         proximity,
+        rewardProximity,
         proximityGamma,
         playerValue,
         targetValue: trialTarget,
@@ -275,6 +281,7 @@
           at: now,
           distance,
           proximity,
+          rewardProximity,
           proximityGamma,
           reward,
           colorRGB,
@@ -309,6 +316,7 @@
         colorRGB,
         distance: null,
         proximity: 0,
+        rewardProximity: 0,
         proximityGamma: 0,
         playerValue: null,
         targetValue: state.targetPos,
@@ -327,6 +335,7 @@
           at: now,
           distance: null,
           proximity: 0,
+          rewardProximity: 0,
           proximityGamma: 0,
           reward: 0,
           colorRGB,
